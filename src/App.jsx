@@ -802,7 +802,7 @@ function AdminLogin({ onSuccess, showToast }) {
           onChange={(e) => setPassword(e.target.value)}
           placeholder="••••••••"
           error={err}
-          hint="Hint: admin123"
+          hint="Hint: nothing lol"
         />
         <button type="submit" className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">
           Sign in
