@@ -611,1124 +611,1233 @@ function EmptyState({ icon, title, message, actionText, onAction }) {
 /*************************
  * ROOT APP
  *************************/
+/*************************
+ * ROOT APP
+ *************************/
 export default function App() {
   const [tab, setTab] = useState("browse");
-  // 1. Initialize state with safe, default values (NOT from localStorage)
-  const [products, setProducts] = useState([]); // Start with an empty array
-  const [requests, setRequests] = useState([]); // Start with an empty array
-  const [passwordResets, setPasswordResets] = useState([]); // Start with an empty array
+  const [products, setProducts] = useState([]);
+  const [requests, setRequests] = useState([]);
+  const [passwordResets, setPasswordResets] = useState([]);
   const [loading, setLoading] = useState(true);
   const { toast, showToast, showUndoToast, hideToast } = useToast();
-
-  const [session, setSessionState] = useState(null); // Start with null
+  const [session, setSessionState] = useState(null);
   const me = useMemo(() => currentUser(session), [session]);
 
-  // 2. Use ONE useEffect to load all data from localStorage after the app mounts
   useEffect(() => {
-    ensureInit(); // Keep this here
+    ensureInit();
     setProducts(lsget(LSK_PRODUCTS, SEED_PRODUCTS));
     setRequests(lsget(LSK_REQUESTS, SEED_REQUESTS));
     setPasswordResets(lsget(LSK_PASSWORD_RESETS, []));
-    setSessionState(getSession()); // Load the session here
+    setSessionState(getSession());
     setLoading(false);
-  }, []); // The empty array [] makes this run only once.
+  }, []);
 
-  // The rest of your useEffects that SAVE data are fine.
   useEffect(() => {
     if (!loading) lssave(LSK_PRODUCTS, products);
   }, [products, loading]);
-  // ... etc. ...
+  useEffect(() => {
+    if (!loading) lssave(LSK_REQUESTS, requests);
+  }, [requests, loading]);
+  useEffect(() => {
+    if (!loading) lssave(LSK_PASSWORD_RESETS, passwordResets);
+  }, [passwordResets, loading]);
 
-  function IconBtn({ active, label, icon, onClick }) {
-    return (
-      <button
-        onClick={onClick}
-        className={cx(
-          "flex flex-col items-center justify-center gap-1 rounded-xl px-4 py-2 text-xs w-24 h-16 transition-colors",
-          active ? "bg-white/10 text-white" : "text-white/60 hover:bg-white/5 hover:text-white"
-        )}
-      >
-        {icon}
-        <span>{label}</span>
-      </button>
-    );
-  }
+  const counts = useMemo(() => {
+    const by = Object.fromEntries(STATUS.map((s) => [s, 0]));
+    requests.forEach((r) => (by[r.status] = (by[r.status] || 0) + 1));
+    return by;
+  }, [requests]);
 
-  /*************************
-   * AUTH UI
-   *************************/
-  function AdminLogin({ onSuccess, showToast }) {
-    const [username, setUsername] = useState(ADMIN_USERNAME);
-    const [password, setPassword] = useState("");
-    const [err, setErr] = useState("");
+  const handleLogout = () => {
+    logout();
+    setSessionState(getSession());
+    showToast("You have been logged out.", "info");
+  };
 
-    function submit(e) {
-      e.preventDefault();
-      const s = loginAdmin(username, password);
-      if (s) {
-        showToast("Admin login successful!", "success");
-        onSuccess?.();
-      } else {
-        setErr("Invalid username or password.");
-        showToast("Login failed. Please check your credentials.", "error");
-      }
-    }
-
-    return (
-      <Card className="p-6 max-w-md mx-auto">
-        <form onSubmit={submit} className="space-y-4">
-          <h2 className="text-lg font-semibold mb-2">Admin Login</h2>
-          <Input
-            id="admin-username"
-            label="Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="admin@fyne.app"
-          />
-          <Input
-            id="admin-password"
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            error={err}
-            hint="Hint: admin123"
-          />
-          <button type="submit" className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">
-            Sign in
-          </button>
-        </form>
-      </Card>
-    );
-  }
-
-  function AffiliateAuthPanel({ onAuthChange, showToast, passwordResets, setPasswordResets }) {
-    const [mode, setMode] = useState("login"); // login | register | forgot
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const [tiktok, setTikTok] = useState("");
-    const [discord, setDiscord] = useState("");
-    const [displayName, setDisplayName] = useState("");
-    const [err, setErr] = useState({});
-
-    function validate(fields) {
-      const newErrors = {};
-      if (fields.includes('email') && !email) newErrors.email = "Email is required.";
-      else if (fields.includes('email') && !/\S+@\S+\.\S+/.test(email)) newErrors.email = "Email is invalid.";
-
-      if (fields.includes('password') && !password) newErrors.password = "Password is required.";
-      else if (fields.includes('password') && password.length < 6) newErrors.password = "Password must be at least 6 characters.";
-
-      if (fields.includes('displayName') && !displayName) newErrors.displayName = "Display name is required.";
-      if (fields.includes('tiktok') && !tiktok) newErrors.tiktok = "TikTok username is required.";
-      if (fields.includes('discord') && !discord) newErrors.discord = "Discord username is required.";
-
-      setErr(newErrors);
-      return Object.keys(newErrors).length === 0;
-    }
-
-    function doLogin(e) {
-      e.preventDefault();
-      if (!validate(['email', 'password'])) return;
-
-      const result = loginAffiliate(email, password);
-      if (result.session) {
-        showToast("Welcome back!", "success");
-        onAuthChange?.();
-      } else {
-        setErr({ form: result.error || "An unknown login error occurred." });
-      }
-    }
-
-    function doRegister(e) {
-      e.preventDefault();
-      if (!validate(['displayName', 'email', 'password', 'tiktok', 'discord'])) return;
-
-      try {
-        const ok = registerAffiliate({ email, password, displayName, tiktok, discord });
-        if (!ok) {
-          setErr({ form: "An account with this email already exists." });
-          return;
-        }
-        showToast("Registration successful! Your account is pending admin approval.", "success");
-        setErr({});
-        setMode("login");
-      } catch (e) {
-        setErr({ form: e.message });
-      }
-    }
-
-    function doForgotPassword(e) {
-      e.preventDefault();
-      if (!validate(['email'])) return;
-
-      const newRequest = { id: `RESET_${Date.now()}`, email, createdAt: nowISO(), status: 'pending' };
-      setPasswordResets(prev => [...prev, newRequest]);
-      showToast("Password reset request sent. An admin will contact you.", "success");
-      setMode("login");
-    }
-
-    return (
-      <Card className="p-6 max-w-md mx-auto">
-        <div className="flex gap-2 mb-4 border-b border-white/10 pb-4">
-          <button onClick={() => { setMode("login"); setErr({}); }} className={cx("flex-1 rounded-lg border px-3 py-2 text-sm transition-colors", mode === "login" ? "bg-white/20 border-white/30" : "bg-white/5 border-white/10")}>Login</button>
-          <button onClick={() => { setMode("register"); setErr({}); }} className={cx("flex-1 rounded-lg border px-3 py-2 text-sm transition-colors", mode === "register" ? "bg-white/20 border-white/30" : "bg-white/5 border-white/10")}>Register</button>
-        </div>
-
-        {err.form && <div className="bg-rose-500/20 text-rose-200 text-sm rounded-lg p-3 mb-4">{err.form}</div>}
-
-        {mode === "login" && (
-          <form onSubmit={doLogin} className="space-y-4">
-            <Input id="login-email" label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" error={err.email} required />
-            <Input id="login-password" label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" error={err.password} required />
-            <button type="submit" className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">Sign in</button>
-            <div className="text-center">
-              <button type="button" onClick={() => setMode('forgot')} className="text-xs text-sky-300 hover:underline">Forgot Password?</button>
+  return (
+    <div className="min-h-screen w-full text-white bg-slate-900 bg-[radial-gradient(60%_40%_at_10%_10%,rgba(99,102,241,.15),transparent),radial-gradient(60%_40%_at_90%_10%,rgba(236,72,153,.15),transparent),radial-gradient(80%_60%_at_50%_90%,rgba(34,197,94,.1),transparent)]">
+      {/* Header */}
+      <header className="sticky top-0 z-20 backdrop-blur-lg bg-slate-900/60 border-b border-white/10">
+        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-fuchsia-500 to-sky-500 border border-white/20 flex items-center justify-center text-sm font-bold shadow-lg">
+              FS
             </div>
-          </form>
-        )}
-
-        {mode === "register" && (
-          <form onSubmit={doRegister} className="space-y-4">
-            <Input id="reg-name" label="Display Name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Your Name" error={err.displayName} required />
-            <Input id="reg-email" label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" error={err.email} required />
-            <Input id="reg-tiktok" label="TikTok Username" value={tiktok} onChange={(e) => setTikTok(e.target.value)} placeholder="@yourtiktok" error={err.tiktok} required />
-            <Input id="reg-discord" label="Discord Username" value={discord} onChange={(e) => setDiscord(e.target.value)} placeholder="your_discord#1234" error={err.discord} required />
-            <Input id="reg-password" label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" error={err.password} hint="Minimum 6 characters." required />
-            <button type="submit" className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">Create Account</button>
-            <p className="text-xs text-white/60 text-center">After registration, an admin must approve your account.</p>
-          </form>
-        )}
-
-        {mode === "forgot" && (
-          <form onSubmit={doForgotPassword} className="space-y-4">
-            <h3 className="font-semibold">Request Password Reset</h3>
-            <p className="text-sm text-white/70">Enter your account email. An admin will be notified to help you reset your password.</p>
-            <Input id="forgot-email" label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" error={err.email} required />
-            <button type="submit" className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">Send Request</button>
-          </form>
-        )}
-      </Card>
-    );
-  }
-
-  /*************************
-   * AFFILIATE ONBOARDING
-   *************************/
-  function AffiliateOnboarding({ profile, setProfile, onFinish }) {
-    const [step, setStep] = useState(1);
-
-    const nextStep = () => setStep(s => s + 1);
-
-    const finishOnboarding = () => {
-      lssave(LSK_ONBOARDING, { completed: true });
-      onFinish();
-    };
-
-    return (
-      <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <Card className="max-w-lg w-full p-6">
-          <div className="flex justify-between items-start mb-6">
             <div>
-              <h2 className="text-xl font-bold">Welcome to the Creator Hub!</h2>
-              <p className="text-white/70">Let's get you set up in a few quick steps.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {[1, 2, 3].map(s => (
-                <div key={s} className={cx("w-2 h-2 rounded-full", s <= step ? 'bg-indigo-400' : 'bg-white/20')} />
-              ))}
+              <div className="text-base font-semibold">Fyne Skincare Creator Hub</div>
+              <div className="text-xs text-white/60">Glassy • Mobile-first</div>
             </div>
           </div>
-
-          {step === 1 && <OnboardingStep1 profile={profile} setProfile={setProfile} onNext={nextStep} />}
-          {step === 2 && <OnboardingStep2 onNext={nextStep} />}
-          {step === 3 && <OnboardingStep3 onNext={finishOnboarding} />}
-
-          <div className="mt-6 text-center">
-            <button onClick={finishOnboarding} className="text-xs text-white/50 hover:text-white hover:underline">
-              Done for now, take me to the app
+          <div className="hidden sm:flex items-center gap-2">
+            <button
+              onClick={() => setTab("browse")}
+              className={cx(
+                "px-3 py-1.5 rounded-lg text-sm border transition-colors",
+                tab === "browse" ? "bg-white/20 border-white/30" : "bg-white/5 border-white/10 hover:bg-white/10"
+              )}
+            >
+              Affiliate
+            </button>
+            <button
+              onClick={() => setTab("admin")}
+              className={cx(
+                "px-3 py-1.5 rounded-lg text-sm border transition-colors",
+                tab === "admin" ? "bg-white/20 border-white/30" : "bg-white/5 border-white/10 hover:bg-white/10"
+              )}
+            >
+              Admin
             </button>
           </div>
-        </Card>
-      </div>
-    );
-  }
-
-  function OnboardingStep1({ profile, setProfile, onNext }) {
-    const [errors, setErrors] = useState({});
-
-    const handleNext = () => {
-      const newErrors = {};
-      if (!profile.tiktok) newErrors.tiktok = "TikTok username is required.";
-      if (!profile.discord) newErrors.discord = "Discord username is required.";
-      if (!profile.email) newErrors.email = "Email is required.";
-      setErrors(newErrors);
-      if (Object.keys(newErrors).length === 0) {
-        onNext();
-      }
-    };
-
-    return (
-      <div>
-        <h3 className="font-semibold mb-1">Step 1: Complete Your Profile</h3>
-        <p className="text-sm text-white/60 mb-4">This helps us track your tasks and commissions.</p>
-        <div className="space-y-3">
-          <Input id="onboard-tiktok" label="TikTok Username" value={profile.tiktok} onChange={e => setProfile({ ...profile, tiktok: e.target.value })} placeholder="@yourtiktok" error={errors.tiktok} required />
-          <Input id="onboard-discord" label="Discord Username" value={profile.discord} onChange={e => setProfile({ ...profile, discord: e.target.value })} placeholder="your_discord#1234" error={errors.discord} required />
-          <Input id="onboard-email" label="Email" type="email" value={profile.email} onChange={e => setProfile({ ...profile, email: e.target.value })} placeholder="your@email.com" error={errors.email} required />
         </div>
-        <button onClick={handleNext} className="mt-4 w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">Next</button>
-      </div>
-    );
-  }
+      </header>
 
-  function OnboardingStep2({ onNext }) {
-    return (
-      <div>
-        <h3 className="font-semibold mb-1">Step 2: How It Works</h3>
-        <div className="text-sm text-white/70 space-y-3 mt-4">
-          <p>1. <b className="text-white">Browse Products:</b> Find products you want to promote.</p>
-          <p>2. <b className="text-white">Create a Task:</b> Add a product to your showcase to get your unique affiliate link.</p>
-          <p>3. <b className="text-white">Submit Your Content:</b> Post your video on TikTok, then submit the video link and ad code here.</p>
-          <p>4. <b className="text-white">Get Paid:</b> Once approved, you'll earn commissions!</p>
+      {/* Content */}
+      <main className="mx-auto max-w-6xl px-3 pb-28 pt-6 sm:px-4">
+        {loading ? <SkeletonLoader className="w-full h-64" /> : (
+          <>
+            {tab === "browse" ? (
+              isAffiliate(session) ? (
+                <AffiliateScreen
+                  session={session}
+                  products={products}
+                  requests={requests}
+                  setRequests={setRequests}
+                  showToast={showToast}
+                  me={me}
+                  setTab={setTab}
+                />
+              ) : (
+                <AffiliateAuthPanel
+                  onAuthChange={() => setSessionState(getSession())}
+                  showToast={showToast}
+                  passwordResets={passwordResets}
+                  setPasswordResets={setPasswordResets}
+                />
+              )
+            ) : isAdmin(session) ? (
+              <AdminScreen
+                products={products}
+                setProducts={setProducts}
+                requests={requests}
+                setRequests={setRequests}
+                passwordResets={passwordResets}
+                setPasswordResets={setPasswordResets}
+                counts={counts}
+                me={me}
+                onLogout={handleLogout}
+                showToast={showToast}
+                showUndoToast={showUndoToast}
+              />
+            ) : (
+              <AdminLogin onSuccess={() => setSessionState(getSession())} showToast={showToast} />
+            )}
+          </>
+        )}
+      </main>
+
+      {/* Bottom Nav (mobile) */}
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-slate-900/50 backdrop-blur-lg border-t border-white/10" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+        <div className="flex items-center justify-around p-2">
+          <IconBtn active={tab === "browse"} label="Affiliate" icon={<UserGroupIcon />} onClick={() => setTab("browse")} />
+          <IconBtn active={tab === "admin"} label="Admin" icon={<BuildingStorefrontIcon />} onClick={() => setTab("admin")} />
         </div>
-        <button onClick={onNext} className="mt-4 w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">Next</button>
-      </div>
-    );
-  }
+      </nav>
 
-  function OnboardingStep3({ onNext }) {
-    return (
-      <div>
-        <h3 className="font-semibold mb-1">Step 3: You're All Set!</h3>
-        <p className="text-sm text-white/60 mt-4">
-          You're ready to start browsing products and creating content. Good luck!
-        </p>
-        <button onClick={onNext} className="mt-4 w-full rounded-lg border border-emerald-400/50 bg-emerald-500/80 hover:bg-emerald-500 px-4 py-3 text-sm font-semibold transition-colors">
-          Let's Go!
-        </button>
-      </div>
-    );
-  }
+      <Toast toast={toast} onDismiss={hideToast} />
+    </div>
+  );
+}
+function IconBtn({ active, label, icon, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cx(
+        "flex flex-col items-center justify-center gap-1 rounded-xl px-4 py-2 text-xs w-24 h-16 transition-colors",
+        active ? "bg-white/10 text-white" : "text-white/60 hover:bg-white/5 hover:text-white"
+      )}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
 
+/*************************
+ * AUTH UI
+ *************************/
+function AdminLogin({ onSuccess, showToast }) {
+  const [username, setUsername] = useState(ADMIN_USERNAME);
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState("");
 
-  /*************************
-   * AFFILIATE EXPERIENCE
-   *************************/
-  function AffiliateScreen({ session, products, requests, setRequests, showToast, me, setTab }) {
-    const [affView, setAffView] = useState("products");
-    // 1. Initialize with safe default values
-    const [profile, setProfile] = useState({ tiktok: "", discord: "", email: "", photo: "" });
-    const [onboarding, setOnboarding] = useState({ completed: true }); // Assume completed until checked
-
-    // 2. Use useEffect to load from localStorage
-    useEffect(() => {
-      setProfile(lsget(LSK_PROFILE, { tiktok: "", discord: "", email: "", photo: "" }));
-      setOnboarding(lsget(LSK_ONBOARDING, { completed: false }));
-    }, []);
-
-    // The rest of your useEffects are fine
-    useEffect(() => lssave(LSK_PROFILE, profile), [profile]);
-    // ... etc. ...
-  }
-
-  function AffiliateProfilePage({ profile, setProfile, showToast, onLogout }) {
-    const [localProfile, setLocalProfile] = useState(profile);
-    const [errors, setErrors] = useState({});
-
-    const onPhotoChange = (dataUrl) => {
-      setLocalProfile(prev => ({ ...prev, photo: dataUrl }));
-    };
-
-    const handleSave = () => {
-      const newErrors = {};
-      if (!localProfile.tiktok) newErrors.tiktok = "TikTok username is required.";
-      if (!localProfile.discord) newErrors.discord = "Discord username is required.";
-      if (!localProfile.email) newErrors.email = "Email is required.";
-      setErrors(newErrors);
-
-      if (Object.keys(newErrors).length === 0) {
-        setProfile(localProfile);
-        showToast("Profile updated successfully!", "success");
-      } else {
-        showToast("Please fill out all required fields.", "error");
-      }
-    };
-
-    return (
-      <Card className="p-4 sm:p-6">
-        <div className="flex flex-col sm:flex-row items-start gap-6">
-          <div className="flex flex-col items-center">
-            <ProfilePhotoPicker value={localProfile.photo || ""} onChange={onPhotoChange} />
-            <p className="text-xs text-white/50 mt-2 text-center">Photo is saved locally.</p>
-          </div>
-          <div className="flex-1 w-full space-y-4">
-            <Input id="profile-tiktok" label="TikTok Username" value={localProfile.tiktok} onChange={(e) => setLocalProfile({ ...localProfile, tiktok: e.target.value })} placeholder="@yourtiktok" error={errors.tiktok} required />
-            <Input id="profile-discord" label="Discord Username" value={localProfile.discord} onChange={(e) => setLocalProfile({ ...localProfile, discord: e.target.value })} placeholder="your_discord#1234" error={errors.discord} required />
-            <Input id="profile-email" label="Email" type="email" value={localProfile.email} onChange={(e) => setLocalProfile({ ...localProfile, email: e.target.value })} placeholder="your@email.com" error={errors.email} required />
-          </div>
-        </div>
-        <div className="mt-6 flex flex-col sm:flex-row justify-end gap-3 border-t border-white/10 pt-4">
-          <button onClick={onLogout} className="rounded-lg border border-rose-400/40 bg-rose-400/15 px-4 py-2 text-sm text-rose-200 hover:bg-rose-400/20 transition-colors">Logout</button>
-          <button onClick={handleSave} className="rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-6 py-2 text-sm font-semibold transition-colors">Save Profile</button>
-        </div>
-      </Card>
-    );
-  }
-
-  function ProductDetailsPage({ product, onBack, onCreateTask, myTask }) {
-    const inWindow = useMemo(() => {
-      const n = Date.now();
-      return n >= new Date(product.availabilityStart).getTime() && n <= new Date(product.availabilityEnd).getTime();
-    }, [product]);
-
-    const isComplete = myTask?.status === "Complete";
-    const hasOpenTask = myTask && !isComplete;
-
-    const handleAction = () => {
-      onCreateTask(product);
+  function submit(e) {
+    e.preventDefault();
+    const s = loginAdmin(username, password);
+    if (s) {
+      showToast("Admin login successful!", "success");
+      onSuccess?.();
+    } else {
+      setErr("Invalid username or password.");
+      showToast("Login failed. Please check your credentials.", "error");
     }
-
-    return (
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <button onClick={onBack} className="rounded-lg border border-white/20 bg-white/10 hover:bg-white/20 px-4 py-2 text-sm transition-colors">← Back to products</button>
-        </div>
-
-        <Card className="p-4 sm:p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <img src={product.image} alt={product.title} className="w-full rounded-xl border border-white/10" />
-              <h2 className="text-2xl font-bold">{product.title}</h2>
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <Badge>{product.category}</Badge>
-                <Badge>{product.commission}</Badge>
-                {inWindow ? <Badge tone="success">Available now</Badge> : <Badge tone="warn">Out of window</Badge>}
-              </div>
-              <div className="text-sm text-white/80">
-                Available: {fmtDate(product.availabilityStart)} → {fmtDate(product.availabilityEnd)}
-              </div>
-              <div className="flex items-center gap-4 text-sm pt-2">
-                <a href={product.productUrl} target="_blank" rel="noopener noreferrer" className="text-sky-300 hover:underline">View Product Page</a>
-                <span className="text-white/30">•</span>
-                <a href={product.contentDocUrl} target="_blank" rel="noopener noreferrer" className="text-sky-300 hover:underline">Content Strategy Doc</a>
-              </div>
-            </div>
-
-            <div className="space-y-6 flex flex-col justify-center">
-              <div className="p-4 rounded-lg bg-white/5 border border-white/10 text-center">
-                <h3 className="font-semibold mb-2">Add to Your Showcase</h3>
-                <p className="text-sm text-white/70 mb-4">This will create a task and open your unique affiliate link in TikTok.</p>
-                <button
-                  disabled={!inWindow || hasOpenTask || isComplete}
-                  onClick={handleAction}
-                  className={cx(
-                    "w-full rounded-xl border px-3 py-3 text-center text-sm font-semibold transition-colors mb-4",
-                    (!inWindow || hasOpenTask || isComplete)
-                      ? "bg-white/5 border-white/10 text-white/40 cursor-not-allowed"
-                      : "border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500"
-                  )}
-                >
-                  {hasOpenTask ? "Task Already Open" : isComplete ? "Task Completed" : !inWindow ? "Not Available" : "Add to Showcase"}
-                </button>
-
-                <div className="flex flex-col items-center justify-center gap-2">
-                  <QR url={product.shareLink} onClick={handleAction} />
-                  <button onClick={handleAction} className="text-xs text-sky-300 hover:underline">
-                    or tap here to Add to Showcase
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Card>
-      </div>
-    );
   }
 
-  function AffiliateTasksPage({ requests, setRequests, profile, me, showToast, setAffView }) {
-    const mine = useMemo(() => {
-      const isMine = (t) =>
-        (profile.email && t.affiliateEmail === profile.email) ||
-        (profile.tiktok && t.affiliateTikTok === profile.tiktok) ||
-        (me?.id && t.affiliateUserId === me.id);
-      return requests.filter(isMine).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    }, [requests, profile, me?.id]);
+  return (
+    <Card className="p-6 max-w-md mx-auto">
+      <form onSubmit={submit} className="space-y-4">
+        <h2 className="text-lg font-semibold mb-2">Admin Login</h2>
+        <Input
+          id="admin-username"
+          label="Username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="admin@fyne.app"
+        />
+        <Input
+          id="admin-password"
+          label="Password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="••••••••"
+          error={err}
+          hint="Hint: admin123"
+        />
+        <button type="submit" className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">
+          Sign in
+        </button>
+      </form>
+    </Card>
+  );
+}
 
-    const [localTasks, setLocalTasks] = useState({});
+function AffiliateAuthPanel({ onAuthChange, showToast, passwordResets, setPasswordResets }) {
+  const [mode, setMode] = useState("login"); // login | register | forgot
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [tiktok, setTikTok] = useState("");
+  const [discord, setDiscord] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [err, setErr] = useState({});
 
-    useEffect(() => {
-      const initial = {};
-      mine.forEach(task => {
-        initial[task.id] = { videoLink: task.videoLink || '', adCode: task.adCode || '' };
-      });
-      setLocalTasks(initial);
-    }, [requests, profile, me?.id]);
+  function validate(fields) {
+    const newErrors = {};
+    if (fields.includes('email') && !email) newErrors.email = "Email is required.";
+    else if (fields.includes('email') && !/\S+@\S+\.\S+/.test(email)) newErrors.email = "Email is invalid.";
 
-    const handleInputChange = (id, field, value) => {
-      setLocalTasks(prev => ({
-        ...prev,
-        [id]: { ...prev[id], [field]: value }
-      }));
-    };
+    if (fields.includes('password') && !password) newErrors.password = "Password is required.";
+    else if (fields.includes('password') && password.length < 6) newErrors.password = "Password must be at least 6 characters.";
 
-    const handleSubmit = (id) => {
-      const taskData = localTasks[id];
-      if (!taskData.videoLink || !taskData.adCode) {
-        showToast("Please provide both the TikTok video link and the ad code.", "error");
+    if (fields.includes('displayName') && !displayName) newErrors.displayName = "Display name is required.";
+    if (fields.includes('tiktok') && !tiktok) newErrors.tiktok = "TikTok username is required.";
+    if (fields.includes('discord') && !discord) newErrors.discord = "Discord username is required.";
+
+    setErr(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }
+
+  function doLogin(e) {
+    e.preventDefault();
+    if (!validate(['email', 'password'])) return;
+
+    const result = loginAffiliate(email, password);
+    if (result.session) {
+      showToast("Welcome back!", "success");
+      onAuthChange?.();
+    } else {
+      setErr({ form: result.error || "An unknown login error occurred." });
+    }
+  }
+
+  function doRegister(e) {
+    e.preventDefault();
+    if (!validate(['displayName', 'email', 'password', 'tiktok', 'discord'])) return;
+
+    try {
+      const ok = registerAffiliate({ email, password, displayName, tiktok, discord });
+      if (!ok) {
+        setErr({ form: "An account with this email already exists." });
         return;
       }
-      const next = requests.map((r) => (r.id === id ? { ...r, ...taskData, status: "Video Submitted", updatedAt: nowISO() } : r));
-      setRequests(next);
-      showToast("Task submitted for review!", "success");
-    };
-
-    return (
-      <Card className="p-3">
-        <h2 className="text-lg font-semibold mb-4">My Tasks</h2>
-        <div className="grid grid-cols-1 gap-4">
-          {mine.map((r) => {
-            const localData = localTasks[r.id] || { videoLink: '', adCode: '' };
-            const isComplete = r.status === 'Complete';
-            const isPendingInput = r.status === 'Pending';
-            return (
-              <div key={r.id} className="rounded-xl border border-white/15 bg-white/5 p-4 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="font-semibold truncate" title={r.productTitle}>{r.productTitle}</div>
-                    <div className="text-xs text-white/60">Requested: {new Date(r.createdAt).toLocaleDateString()}</div>
-                  </div>
-                  <Badge tone={isComplete ? 'success' : 'info'}>{r.status}</Badge>
-                </div>
-
-                <div className="space-y-3">
-                  <Input
-                    id={`video-${r.id}`}
-                    label="TikTok Video Link"
-                    value={localData.videoLink}
-                    onChange={(e) => handleInputChange(r.id, 'videoLink', e.target.value)}
-                    placeholder="https://www.tiktok.com/..."
-                    disabled={!isPendingInput}
-                  />
-                  <Input
-                    id={`adcode-${r.id}`}
-                    label="Ad Code"
-                    value={localData.adCode}
-                    onChange={(e) => handleInputChange(r.id, 'adCode', e.target.value)}
-                    placeholder="e.g., TIKTOKAD123"
-                    disabled={!isPendingInput}
-                  />
-                </div>
-
-                {isPendingInput && (
-                  <button
-                    onClick={() => handleSubmit(r.id)}
-                    className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-2.5 text-sm font-semibold transition-colors"
-                  >
-                    Submit for Review
-                  </button>
-                )}
-                {isComplete && <p className="text-sm text-emerald-300 text-center font-medium">🎉 This task is complete. Great job!</p>}
-                {!isPendingInput && !isComplete && <p className="text-sm text-sky-300 text-center font-medium">This task is currently under review by an admin.</p>}
-              </div>
-            )
-          })}
-          {!mine.length && (
-            <EmptyState
-              icon={<ClipboardDocumentListIcon className="w-full h-full" />}
-              title="No Tasks Yet"
-              message="You haven't created any tasks. Browse the products and add one to your showcase to get started."
-              actionText="Browse Products"
-              onAction={() => setAffView("products")}
-            />
-          )}
-        </div>
-      </Card>
-    );
+      showToast("Registration successful! Your account is pending admin approval.", "success");
+      setErr({});
+      setMode("login");
+    } catch (e) {
+      setErr({ form: e.message });
+    }
   }
 
-  function AffiliateStats({ requests, profile, me }) {
-    const mine = useMemo(() => {
-      const isMine = (t) =>
-        (profile.email && t.affiliateEmail === profile.email) ||
-        (profile.tiktok && t.affiliateTikTok === profile.tiktok) ||
-        (me?.id && t.affiliateUserId === me.id);
-      return requests.filter(isMine);
-    }, [requests, profile, me?.id]);
+  function doForgotPassword(e) {
+    e.preventDefault();
+    if (!validate(['email'])) return;
 
-    const totals = useMemo(() => {
-      const completedTasks = mine.filter(t => t.status === 'Complete');
+    const newRequest = { id: `RESET_${Date.now()}`, email, createdAt: nowISO(), status: 'pending' };
+    setPasswordResets(prev => [...prev, newRequest]);
+    showToast("Password reset request sent. An admin will contact you.", "success");
+    setMode("login");
+  }
 
-      const perDay = {};
-      mine.forEach((t) => {
-        const d = (t.createdAt || "").slice(0, 10);
-        perDay[d] = (perDay[d] || 0) + 1;
-      });
-      const days = 14;
-      const now = new Date();
-      const series = [];
-      for (let i = days - 1; i >= 0; i--) {
-        const d = new Date(now.getTime() - i * 86400000);
-        const key = d.toISOString().slice(0, 10);
-        series.push({ date: key, count: perDay[key] || 0 });
-      }
-      const max = Math.max(1, ...series.map((s) => s.count));
-      return {
-        requested: mine.length,
-        completed: completedTasks.length,
-        series,
-        max
-      };
-    }, [mine]);
+  return (
+    <Card className="p-6 max-w-md mx-auto">
+      <div className="flex gap-2 mb-4 border-b border-white/10 pb-4">
+        <button onClick={() => { setMode("login"); setErr({}); }} className={cx("flex-1 rounded-lg border px-3 py-2 text-sm transition-colors", mode === "login" ? "bg-white/20 border-white/30" : "bg-white/5 border-white/10")}>Login</button>
+        <button onClick={() => { setMode("register"); setErr({}); }} className={cx("flex-1 rounded-lg border px-3 py-2 text-sm transition-colors", mode === "register" ? "bg-white/20 border-white/30" : "bg-white/5 border-white/10")}>Register</button>
+      </div>
 
-    return (
-      <Card className="p-4">
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <Stat label="Tasks Created" value={totals.requested} />
-          <Stat label="Tasks Completed" value={totals.completed} />
+      {err.form && <div className="bg-rose-500/20 text-rose-200 text-sm rounded-lg p-3 mb-4">{err.form}</div>}
+
+      {mode === "login" && (
+        <form onSubmit={doLogin} className="space-y-4">
+          <Input id="login-email" label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" error={err.email} required />
+          <Input id="login-password" label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" error={err.password} required />
+          <button type="submit" className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">Sign in</button>
+          <div className="text-center">
+            <button type="button" onClick={() => setMode('forgot')} className="text-xs text-sky-300 hover:underline">Forgot Password?</button>
+          </div>
+        </form>
+      )}
+
+      {mode === "register" && (
+        <form onSubmit={doRegister} className="space-y-4">
+          <Input id="reg-name" label="Display Name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Your Name" error={err.displayName} required />
+          <Input id="reg-email" label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" error={err.email} required />
+          <Input id="reg-tiktok" label="TikTok Username" value={tiktok} onChange={(e) => setTikTok(e.target.value)} placeholder="@yourtiktok" error={err.tiktok} required />
+          <Input id="reg-discord" label="Discord Username" value={discord} onChange={(e) => setDiscord(e.target.value)} placeholder="your_discord#1234" error={err.discord} required />
+          <Input id="reg-password" label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" error={err.password} hint="Minimum 6 characters." required />
+          <button type="submit" className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">Create Account</button>
+          <p className="text-xs text-white/60 text-center">After registration, an admin must approve your account.</p>
+        </form>
+      )}
+
+      {mode === "forgot" && (
+        <form onSubmit={doForgotPassword} className="space-y-4">
+          <h3 className="font-semibold">Request Password Reset</h3>
+          <p className="text-sm text-white/70">Enter your account email. An admin will be notified to help you reset your password.</p>
+          <Input id="forgot-email" label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" error={err.email} required />
+          <button type="submit" className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">Send Request</button>
+        </form>
+      )}
+    </Card>
+  );
+}
+
+/*************************
+ * AFFILIATE ONBOARDING
+ *************************/
+function AffiliateOnboarding({ profile, setProfile, onFinish }) {
+  const [step, setStep] = useState(1);
+
+  const nextStep = () => setStep(s => s + 1);
+
+  const finishOnboarding = () => {
+    lssave(LSK_ONBOARDING, { completed: true });
+    onFinish();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <Card className="max-w-lg w-full p-6">
+        <div className="flex justify-between items-start mb-6">
+          <div>
+            <h2 className="text-xl font-bold">Welcome to the Creator Hub!</h2>
+            <p className="text-white/70">Let's get you set up in a few quick steps.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {[1, 2, 3].map(s => (
+              <div key={s} className={cx("w-2 h-2 rounded-full", s <= step ? 'bg-indigo-400' : 'bg-white/20')} />
+            ))}
+          </div>
         </div>
-        <h3 className="text-sm font-semibold mb-2">My Activity (last 14 days)</h3>
-        <div className="grid grid-cols-14 gap-1.5 h-32 items-end border-b border-white/10 pb-2">
-          {totals.series.map((s) => (
-            <div key={s.date} className="flex flex-col items-center gap-1 group">
-              <div className="relative w-full h-full flex items-end">
-                <div title={`${s.date}: ${s.count} tasks`} className="w-full bg-indigo-400/70 rounded-t-sm hover:bg-indigo-300 transition-colors" style={{ height: `${(s.count / totals.max) * 100}%` }} />
+
+        {step === 1 && <OnboardingStep1 profile={profile} setProfile={setProfile} onNext={nextStep} />}
+        {step === 2 && <OnboardingStep2 onNext={nextStep} />}
+        {step === 3 && <OnboardingStep3 onNext={finishOnboarding} />}
+
+        <div className="mt-6 text-center">
+          <button onClick={finishOnboarding} className="text-xs text-white/50 hover:text-white hover:underline">
+            Done for now, take me to the app
+          </button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function OnboardingStep1({ profile, setProfile, onNext }) {
+  const [errors, setErrors] = useState({});
+
+  const handleNext = () => {
+    const newErrors = {};
+    if (!profile.tiktok) newErrors.tiktok = "TikTok username is required.";
+    if (!profile.discord) newErrors.discord = "Discord username is required.";
+    if (!profile.email) newErrors.email = "Email is required.";
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length === 0) {
+      onNext();
+    }
+  };
+
+  return (
+    <div>
+      <h3 className="font-semibold mb-1">Step 1: Complete Your Profile</h3>
+      <p className="text-sm text-white/60 mb-4">This helps us track your tasks and commissions.</p>
+      <div className="space-y-3">
+        <Input id="onboard-tiktok" label="TikTok Username" value={profile.tiktok} onChange={e => setProfile({ ...profile, tiktok: e.target.value })} placeholder="@yourtiktok" error={errors.tiktok} required />
+        <Input id="onboard-discord" label="Discord Username" value={profile.discord} onChange={e => setProfile({ ...profile, discord: e.target.value })} placeholder="your_discord#1234" error={errors.discord} required />
+        <Input id="onboard-email" label="Email" type="email" value={profile.email} onChange={e => setProfile({ ...profile, email: e.target.value })} placeholder="your@email.com" error={errors.email} required />
+      </div>
+      <button onClick={handleNext} className="mt-4 w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">Next</button>
+    </div>
+  );
+}
+
+function OnboardingStep2({ onNext }) {
+  return (
+    <div>
+      <h3 className="font-semibold mb-1">Step 2: How It Works</h3>
+      <div className="text-sm text-white/70 space-y-3 mt-4">
+        <p>1. <b className="text-white">Browse Products:</b> Find products you want to promote.</p>
+        <p>2. <b className="text-white">Create a Task:</b> Add a product to your showcase to get your unique affiliate link.</p>
+        <p>3. <b className="text-white">Submit Your Content:</b> Post your video on TikTok, then submit the video link and ad code here.</p>
+        <p>4. <b className="text-white">Get Paid:</b> Once approved, you'll earn commissions!</p>
+      </div>
+      <button onClick={onNext} className="mt-4 w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">Next</button>
+    </div>
+  );
+}
+
+function OnboardingStep3({ onNext }) {
+  return (
+    <div>
+      <h3 className="font-semibold mb-1">Step 3: You're All Set!</h3>
+      <p className="text-sm text-white/60 mt-4">
+        You're ready to start browsing products and creating content. Good luck!
+      </p>
+      <button onClick={onNext} className="mt-4 w-full rounded-lg border border-emerald-400/50 bg-emerald-500/80 hover:bg-emerald-500 px-4 py-3 text-sm font-semibold transition-colors">
+        Let's Go!
+      </button>
+    </div>
+  );
+}
+
+
+/*************************
+ * AFFILIATE EXPERIENCE
+ *************************/
+function AffiliateScreen({ session, products, requests, setRequests, showToast, me, setTab }) {
+  const [affView, setAffView] = useState("products");
+  // 1. Initialize with safe default values
+  const [profile, setProfile] = useState({ tiktok: "", discord: "", email: "", photo: "" });
+  const [onboarding, setOnboarding] = useState({ completed: true }); // Assume completed until checked
+
+  // 2. Use useEffect to load from localStorage
+  useEffect(() => {
+    setProfile(lsget(LSK_PROFILE, { tiktok: "", discord: "", email: "", photo: "" }));
+    setOnboarding(lsget(LSK_ONBOARDING, { completed: false }));
+  }, []);
+
+  // The rest of your useEffects are fine
+  useEffect(() => lssave(LSK_PROFILE, profile), [profile]);
+  // ... etc. ...
+}
+
+function AffiliateProfilePage({ profile, setProfile, showToast, onLogout }) {
+  const [localProfile, setLocalProfile] = useState(profile);
+  const [errors, setErrors] = useState({});
+
+  const onPhotoChange = (dataUrl) => {
+    setLocalProfile(prev => ({ ...prev, photo: dataUrl }));
+  };
+
+  const handleSave = () => {
+    const newErrors = {};
+    if (!localProfile.tiktok) newErrors.tiktok = "TikTok username is required.";
+    if (!localProfile.discord) newErrors.discord = "Discord username is required.";
+    if (!localProfile.email) newErrors.email = "Email is required.";
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length === 0) {
+      setProfile(localProfile);
+      showToast("Profile updated successfully!", "success");
+    } else {
+      showToast("Please fill out all required fields.", "error");
+    }
+  };
+
+  return (
+    <Card className="p-4 sm:p-6">
+      <div className="flex flex-col sm:flex-row items-start gap-6">
+        <div className="flex flex-col items-center">
+          <ProfilePhotoPicker value={localProfile.photo || ""} onChange={onPhotoChange} />
+          <p className="text-xs text-white/50 mt-2 text-center">Photo is saved locally.</p>
+        </div>
+        <div className="flex-1 w-full space-y-4">
+          <Input id="profile-tiktok" label="TikTok Username" value={localProfile.tiktok} onChange={(e) => setLocalProfile({ ...localProfile, tiktok: e.target.value })} placeholder="@yourtiktok" error={errors.tiktok} required />
+          <Input id="profile-discord" label="Discord Username" value={localProfile.discord} onChange={(e) => setLocalProfile({ ...localProfile, discord: e.target.value })} placeholder="your_discord#1234" error={errors.discord} required />
+          <Input id="profile-email" label="Email" type="email" value={localProfile.email} onChange={(e) => setLocalProfile({ ...localProfile, email: e.target.value })} placeholder="your@email.com" error={errors.email} required />
+        </div>
+      </div>
+      <div className="mt-6 flex flex-col sm:flex-row justify-end gap-3 border-t border-white/10 pt-4">
+        <button onClick={onLogout} className="rounded-lg border border-rose-400/40 bg-rose-400/15 px-4 py-2 text-sm text-rose-200 hover:bg-rose-400/20 transition-colors">Logout</button>
+        <button onClick={handleSave} className="rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-6 py-2 text-sm font-semibold transition-colors">Save Profile</button>
+      </div>
+    </Card>
+  );
+}
+
+function ProductDetailsPage({ product, onBack, onCreateTask, myTask }) {
+  const inWindow = useMemo(() => {
+    const n = Date.now();
+    return n >= new Date(product.availabilityStart).getTime() && n <= new Date(product.availabilityEnd).getTime();
+  }, [product]);
+
+  const isComplete = myTask?.status === "Complete";
+  const hasOpenTask = myTask && !isComplete;
+
+  const handleAction = () => {
+    onCreateTask(product);
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <button onClick={onBack} className="rounded-lg border border-white/20 bg-white/10 hover:bg-white/20 px-4 py-2 text-sm transition-colors">← Back to products</button>
+      </div>
+
+      <Card className="p-4 sm:p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <img src={product.image} alt={product.title} className="w-full rounded-xl border border-white/10" />
+            <h2 className="text-2xl font-bold">{product.title}</h2>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <Badge>{product.category}</Badge>
+              <Badge>{product.commission}</Badge>
+              {inWindow ? <Badge tone="success">Available now</Badge> : <Badge tone="warn">Out of window</Badge>}
+            </div>
+            <div className="text-sm text-white/80">
+              Available: {fmtDate(product.availabilityStart)} → {fmtDate(product.availabilityEnd)}
+            </div>
+            <div className="flex items-center gap-4 text-sm pt-2">
+              <a href={product.productUrl} target="_blank" rel="noopener noreferrer" className="text-sky-300 hover:underline">View Product Page</a>
+              <span className="text-white/30">•</span>
+              <a href={product.contentDocUrl} target="_blank" rel="noopener noreferrer" className="text-sky-300 hover:underline">Content Strategy Doc</a>
+            </div>
+          </div>
+
+          <div className="space-y-6 flex flex-col justify-center">
+            <div className="p-4 rounded-lg bg-white/5 border border-white/10 text-center">
+              <h3 className="font-semibold mb-2">Add to Your Showcase</h3>
+              <p className="text-sm text-white/70 mb-4">This will create a task and open your unique affiliate link in TikTok.</p>
+              <button
+                disabled={!inWindow || hasOpenTask || isComplete}
+                onClick={handleAction}
+                className={cx(
+                  "w-full rounded-xl border px-3 py-3 text-center text-sm font-semibold transition-colors mb-4",
+                  (!inWindow || hasOpenTask || isComplete)
+                    ? "bg-white/5 border-white/10 text-white/40 cursor-not-allowed"
+                    : "border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500"
+                )}
+              >
+                {hasOpenTask ? "Task Already Open" : isComplete ? "Task Completed" : !inWindow ? "Not Available" : "Add to Showcase"}
+              </button>
+
+              <div className="flex flex-col items-center justify-center gap-2">
+                <QR url={product.shareLink} onClick={handleAction} />
+                <button onClick={handleAction} className="text-xs text-sky-300 hover:underline">
+                  or tap here to Add to Showcase
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function AffiliateTasksPage({ requests, setRequests, profile, me, showToast, setAffView }) {
+  const mine = useMemo(() => {
+    const isMine = (t) =>
+      (profile.email && t.affiliateEmail === profile.email) ||
+      (profile.tiktok && t.affiliateTikTok === profile.tiktok) ||
+      (me?.id && t.affiliateUserId === me.id);
+    return requests.filter(isMine).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [requests, profile, me?.id]);
+
+  const [localTasks, setLocalTasks] = useState({});
+
+  useEffect(() => {
+    const initial = {};
+    mine.forEach(task => {
+      initial[task.id] = { videoLink: task.videoLink || '', adCode: task.adCode || '' };
+    });
+    setLocalTasks(initial);
+  }, [requests, profile, me?.id]);
+
+  const handleInputChange = (id, field, value) => {
+    setLocalTasks(prev => ({
+      ...prev,
+      [id]: { ...prev[id], [field]: value }
+    }));
+  };
+
+  const handleSubmit = (id) => {
+    const taskData = localTasks[id];
+    if (!taskData.videoLink || !taskData.adCode) {
+      showToast("Please provide both the TikTok video link and the ad code.", "error");
+      return;
+    }
+    const next = requests.map((r) => (r.id === id ? { ...r, ...taskData, status: "Video Submitted", updatedAt: nowISO() } : r));
+    setRequests(next);
+    showToast("Task submitted for review!", "success");
+  };
+
+  return (
+    <Card className="p-3">
+      <h2 className="text-lg font-semibold mb-4">My Tasks</h2>
+      <div className="grid grid-cols-1 gap-4">
+        {mine.map((r) => {
+          const localData = localTasks[r.id] || { videoLink: '', adCode: '' };
+          const isComplete = r.status === 'Complete';
+          const isPendingInput = r.status === 'Pending';
+          return (
+            <div key={r.id} className="rounded-xl border border-white/15 bg-white/5 p-4 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-semibold truncate" title={r.productTitle}>{r.productTitle}</div>
+                  <div className="text-xs text-white/60">Requested: {new Date(r.createdAt).toLocaleDateString()}</div>
+                </div>
+                <Badge tone={isComplete ? 'success' : 'info'}>{r.status}</Badge>
+              </div>
+
+              <div className="space-y-3">
+                <Input
+                  id={`video-${r.id}`}
+                  label="TikTok Video Link"
+                  value={localData.videoLink}
+                  onChange={(e) => handleInputChange(r.id, 'videoLink', e.target.value)}
+                  placeholder="https://www.tiktok.com/..."
+                  disabled={!isPendingInput}
+                />
+                <Input
+                  id={`adcode-${r.id}`}
+                  label="Ad Code"
+                  value={localData.adCode}
+                  onChange={(e) => handleInputChange(r.id, 'adCode', e.target.value)}
+                  placeholder="e.g., TIKTOKAD123"
+                  disabled={!isPendingInput}
+                />
+              </div>
+
+              {isPendingInput && (
+                <button
+                  onClick={() => handleSubmit(r.id)}
+                  className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-2.5 text-sm font-semibold transition-colors"
+                >
+                  Submit for Review
+                </button>
+              )}
+              {isComplete && <p className="text-sm text-emerald-300 text-center font-medium">🎉 This task is complete. Great job!</p>}
+              {!isPendingInput && !isComplete && <p className="text-sm text-sky-300 text-center font-medium">This task is currently under review by an admin.</p>}
+            </div>
+          )
+        })}
+        {!mine.length && (
+          <EmptyState
+            icon={<ClipboardDocumentListIcon className="w-full h-full" />}
+            title="No Tasks Yet"
+            message="You haven't created any tasks. Browse the products and add one to your showcase to get started."
+            actionText="Browse Products"
+            onAction={() => setAffView("products")}
+          />
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function AffiliateStats({ requests, profile, me }) {
+  const mine = useMemo(() => {
+    const isMine = (t) =>
+      (profile.email && t.affiliateEmail === profile.email) ||
+      (profile.tiktok && t.affiliateTikTok === profile.tiktok) ||
+      (me?.id && t.affiliateUserId === me.id);
+    return requests.filter(isMine);
+  }, [requests, profile, me?.id]);
+
+  const totals = useMemo(() => {
+    const completedTasks = mine.filter(t => t.status === 'Complete');
+
+    const perDay = {};
+    mine.forEach((t) => {
+      const d = (t.createdAt || "").slice(0, 10);
+      perDay[d] = (perDay[d] || 0) + 1;
+    });
+    const days = 14;
+    const now = new Date();
+    const series = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 86400000);
+      const key = d.toISOString().slice(0, 10);
+      series.push({ date: key, count: perDay[key] || 0 });
+    }
+    const max = Math.max(1, ...series.map((s) => s.count));
+    return {
+      requested: mine.length,
+      completed: completedTasks.length,
+      series,
+      max
+    };
+  }, [mine]);
+
+  return (
+    <Card className="p-4">
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <Stat label="Tasks Created" value={totals.requested} />
+        <Stat label="Tasks Completed" value={totals.completed} />
+      </div>
+      <h3 className="text-sm font-semibold mb-2">My Activity (last 14 days)</h3>
+      <div className="grid grid-cols-14 gap-1.5 h-32 items-end border-b border-white/10 pb-2">
+        {totals.series.map((s) => (
+          <div key={s.date} className="flex flex-col items-center gap-1 group">
+            <div className="relative w-full h-full flex items-end">
+              <div title={`${s.date}: ${s.count} tasks`} className="w-full bg-indigo-400/70 rounded-t-sm hover:bg-indigo-300 transition-colors" style={{ height: `${(s.count / totals.max) * 100}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-1 grid grid-cols-7 text-[10px] text-white/60">
+        {totals.series.map((s, i) => (i % 2 === 0 ? <div key={s.date} className="text-center">{s.date.slice(5)}</div> : <div key={s.date}></div>))}
+      </div>
+    </Card>
+  );
+}
+
+/*************************
+ * ADMIN
+ *************************/
+function AdminScreen({ products, setProducts, requests, setRequests, passwordResets, setPasswordResets, counts, me, onLogout, showToast, showUndoToast }) {
+  const [view, setView] = useState("requests");
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Stat label="Active Products" value={products.filter((p) => p.active && !p.deletedAt).length} />
+        <Stat label="Pending Tasks" value={counts["Pending"] || 0} />
+        <Stat label="Tasks to Review" value={counts["Video Submitted"] || 0} />
+        <Stat label="Completed Tasks" value={counts["Complete"] || 0} />
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button onClick={() => setView("requests")} className={cx("rounded-lg border px-3 py-2 text-sm", view === "requests" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Tasks</button>
+        <button onClick={() => setView("products")} className={cx("rounded-lg border px-3 py-2 text-sm", view === "products" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Products</button>
+        <button onClick={() => setView("users")} className={cx("rounded-lg border px-3 py-2 text-sm", view === "users" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Users</button>
+        <button onClick={() => setView("password_resets")} className={cx("rounded-lg border px-3 py-2 text-sm relative", view === "password_resets" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>
+          Password Resets
+          {passwordResets.filter(r => r.status === 'pending').length > 0 && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center">
+              {passwordResets.filter(r => r.status === 'pending').length}
+            </span>
+          )}
+        </button>
+        <div className="flex-1" />
+        <button onClick={onLogout} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm">Logout</button>
+      </div>
+
+      {view === "requests" && <RequestsPanel requests={requests} setRequests={setRequests} showToast={showToast} showUndoToast={showUndoToast} />}
+      {view === "products" && <ProductsPanel products={products} setProducts={setProducts} showToast={showToast} showUndoToast={showUndoToast} />}
+      {view === "users" && <UsersPanel showToast={showToast} />}
+      {view === "password_resets" && <PasswordResetPanel resets={passwordResets} setResets={setPasswordResets} showToast={showToast} />}
+    </div>
+  );
+}
+
+function Stat({ label, value }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-4 text-center">
+      <div className="text-3xl font-semibold">{value}</div>
+      <div className="text-xs uppercase tracking-wider text-white/60">{label}</div>
+    </div>
+  );
+}
+
+function UsersPanel({ showToast }) {
+  const [users, setUsers] = useState(() => listUsers());
+  function refresh() {
+    setUsers(listUsers());
+  }
+
+  const handleApprove = (id, name) => {
+    approveUser(id);
+    refresh();
+    showToast(`${name}'s account has been approved.`, 'success');
+  }
+
+  const handleReject = (id, name) => {
+    rejectUser(id);
+    refresh();
+    showToast(`${name}'s account has been rejected.`, 'info');
+  }
+
+  return (
+    <Card className="p-4">
+      <h2 className="text-lg font-semibold mb-4">Affiliate Users</h2>
+      <div className="grid grid-cols-1 gap-3">
+        {users.map((u) => (
+          <div key={u.id} className="rounded-xl border border-white/15 bg-white/5 p-3 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="font-medium truncate">{u.displayName || u.email}</div>
+              <div className="text-xs text-white/70 truncate">{u.email} • {u.tiktok} • {u.discord}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge tone={u.status === 'approved' ? 'success' : u.status === 'pending' ? 'info' : 'default'}>{u.status}</Badge>
+              {u.status === 'pending' && (
+                <>
+                  <button onClick={() => handleApprove(u.id, u.displayName)} className="rounded-lg border border-emerald-400/40 bg-emerald-400/15 px-3 py-1 text-xs text-emerald-200 hover:bg-emerald-400/25 transition-colors">Approve</button>
+                  <button onClick={() => handleReject(u.id, u.displayName)} className="rounded-lg border border-rose-400/40 bg-rose-400/15 px-3 py-1 text-xs text-rose-200 hover:bg-rose-400/25 transition-colors">Reject</button>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+        {!users.length && <div className="text-white/70 text-center p-4">No affiliates have registered yet.</div>}
+      </div>
+    </Card>
+  );
+}
+
+function PasswordResetPanel({ resets, setResets, showToast }) {
+  const [newPassword, setNewPassword] = useState({});
+
+  const handlePasswordChange = (id, pass) => {
+    setNewPassword(prev => ({ ...prev, [id]: pass }));
+  }
+
+  const handleUpdatePassword = (reset) => {
+    const pass = newPassword[reset.id];
+    if (!pass || pass.length < 6) {
+      showToast("Password must be at least 6 characters.", "error");
+      return;
+    }
+    const success = updateUserPassword(reset.email, pass);
+    if (success) {
+      setResets(prev => prev.map(r => r.id === reset.id ? { ...r, status: 'completed' } : r));
+      showToast(`Password for ${reset.email} has been updated.`, "success");
+      showToast(`New pass for ${reset.email}: ${pass}. Please send securely.`, 'info', 10000);
+    } else {
+      showToast("Could not find a user with that email.", "error");
+    }
+  };
+
+  const pendingResets = resets.filter(r => r.status === 'pending');
+
+  return (
+    <Card className="p-4">
+      <h2 className="text-lg font-semibold mb-4">Password Reset Requests</h2>
+      {pendingResets.length === 0 ? (
+        <p className="text-white/70">No pending password reset requests.</p>
+      ) : (
+        <div className="space-y-3">
+          {pendingResets.map(reset => (
+            <div key={reset.id} className="rounded-xl border border-white/15 bg-white/5 p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-medium">{reset.email}</p>
+                <p className="text-xs text-white/60">Requested on: {new Date(reset.createdAt).toLocaleString()}</p>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <Input
+                  id={`new-pass-${reset.id}`}
+                  type="text"
+                  placeholder="Enter new password"
+                  value={newPassword[reset.id] || ''}
+                  onChange={e => handlePasswordChange(reset.id, e.target.value)}
+                />
+                <button onClick={() => handleUpdatePassword(reset)} className="rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-3 py-2 text-sm font-semibold transition-colors">
+                  Set
+                </button>
               </div>
             </div>
           ))}
         </div>
-        <div className="mt-1 grid grid-cols-7 text-[10px] text-white/60">
-          {totals.series.map((s, i) => (i % 2 === 0 ? <div key={s.date} className="text-center">{s.date.slice(5)}</div> : <div key={s.date}></div>))}
+      )}
+    </Card>
+  );
+}
+
+
+function RequestsPanel({ requests, setRequests, showToast, showUndoToast }) {
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [q, setQ] = useState("");
+  const [selected, setSelected] = useState(new Set());
+
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return requests
+      .filter((r) => (statusFilter === "All" ? true : r.status === statusFilter))
+      .filter((r) => term ?
+        r.productTitle.toLowerCase().includes(term) ||
+        r.affiliateTikTok?.toLowerCase().includes(term) ||
+        r.affiliateEmail?.toLowerCase().includes(term)
+        : true
+      )
+      .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  }, [requests, statusFilter, q]);
+
+  const SearchHighlight = ({ text, highlight }) => {
+    if (!highlight || !text) return text;
+    const parts = text.split(new RegExp(`(${highlight})`, 'gi'));
+    return (
+      <span>
+        {parts.map((part, i) =>
+          part.toLowerCase() === highlight.toLowerCase() ? (
+            <span key={i} className="bg-yellow-400/30 text-yellow-100">{part}</span>
+          ) : (
+            part
+          )
+        )}
+      </span>
+    );
+  };
+
+  const updateStatus = (ids, newStatus) => {
+    const originalRequests = [...requests];
+    let next = requests.map(r => {
+      if (ids.has(r.id)) {
+        const updatedTask = { ...r, status: newStatus, updatedAt: nowISO() };
+        return updatedTask;
+      }
+      return r;
+    });
+    setRequests(next);
+    showUndoToast(`${ids.size} task(s) updated to "${newStatus}".`, () => {
+      setRequests(originalRequests);
+      showToast("Update reverted.", "info");
+    });
+    setSelected(new Set());
+  };
+
+  const handleSelect = (id) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelected(next);
+  };
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelected(new Set(filtered.map(r => r.id)));
+    } else {
+      setSelected(new Set());
+    }
+  }
+
+  function exportCSV() {
+    const rows = filtered;
+    if (!rows.length) {
+      showToast("No tasks to export.", "info");
+      return;
+    }
+    const csv = Papa.unparse(rows);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `fyne_tasks_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("CSV export started.", "success");
+  }
+
+  return (
+    <Card className="p-4">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 flex-wrap">
+          {["All", ...STATUS].map(s => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={cx("rounded-full border px-3 py-1 text-xs font-medium transition-colors", statusFilter === s ? "bg-white/20 border-white/30" : "bg-white/5 border-white/10 hover:bg-white/10")}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search..." className="flex-grow rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm" />
+          <button onClick={exportCSV} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm">Export</button>
+        </div>
+      </div>
+
+      {selected.size > 0 && (
+        <div className="mb-4 p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center gap-4">
+          <span className="text-sm font-medium">{selected.size} selected</span>
+          <select
+            onChange={e => updateStatus(selected, e.target.value)}
+            className="rounded-lg border border-white/20 bg-slate-800 px-3 py-1.5 text-sm"
+            defaultValue=""
+          >
+            <option value="" disabled>Set status to...</option>
+            {STATUS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+      )}
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm text-left">
+          <thead className="border-b border-white/10 text-xs text-white/60 uppercase">
+            <tr>
+              <th className="p-3 w-8"><input type="checkbox" onChange={handleSelectAll} checked={selected.size === filtered.length && filtered.length > 0} className="rounded" /></th>
+              <th className="p-3">Affiliate</th>
+              <th className="p-3">Product</th>
+              <th className="p-3">Submissions</th>
+              <th className="p-3">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((r) => (
+              <tr key={r.id} className="border-b border-white/10 hover:bg-white/5">
+                <td className="p-3"><input type="checkbox" checked={selected.has(r.id)} onChange={() => handleSelect(r.id)} className="rounded" /></td>
+                <td className="p-3">
+                  <div className="font-medium"><SearchHighlight text={r.affiliateTikTok || ''} highlight={q} /></div>
+                  <div className="text-xs text-white/60"><SearchHighlight text={r.affiliateEmail || ''} highlight={q} /></div>
+                </td>
+                <td className="p-3"><SearchHighlight text={r.productTitle} highlight={q} /></td>
+                <td className="p-3">
+                  {r.videoLink && <a className="underline truncate block max-w-xs" href={r.videoLink} target="_blank" rel="noreferrer">Video Link</a>}
+                  {r.adCode && <div className="font-mono text-xs mt-1">Code: {r.adCode}</div>}
+                </td>
+                <td className="p-3">
+                  <select value={r.status} onChange={(e) => updateStatus(new Set([r.id]), e.target.value)} className="rounded-lg border border-white/20 bg-slate-800 px-2 py-1 text-xs">
+                    {STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filtered.length === 0 && <div className="text-center p-6 text-white/60">No tasks match your filters.</div>}
+      </div>
+    </Card>
+  );
+}
+
+function BulkImportCard({ onImport, showToast }) {
+  const [sheetUrl, setSheetUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [replaceMode, setReplaceMode] = useState(false);
+
+  async function importFromSheet() {
+    if (!sheetUrl) return;
+    setBusy(true);
+    try {
+      const csvUrl = sheetUrlToCsv(sheetUrl);
+      const res = await fetch(csvUrl, { headers: { "Accept": "text/csv" } });
+      if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+      const text = await res.text();
+      const rows = parseCSVText(text);
+      onImport(rows, "Google Sheet", replaceMode);
+      setSheetUrl("");
+    } catch (e) {
+      showToast(
+        `Sheet import error: ${e.message}. Make sure the sheet is public or published to the web as a CSV.`,
+        "error",
+        5000
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onCsvFilePicked(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const rows = parseCSVText(String(reader.result ?? ""));
+        onImport(rows, "CSV file", replaceMode);
+      } catch (err) {
+        showToast(`CSV error: ${err.message}`, "error");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  return (
+    <Card className="p-4">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4">
+        <h2 className="text-lg font-semibold">Bulk Upload Products</h2>
+        <label className="flex items-center gap-2 text-xs mt-2 sm:mt-0 cursor-pointer">
+          <input type="checkbox" checked={replaceMode} onChange={(e) => setReplaceMode(e.target.checked)} className="rounded" />
+          <span>Replace all products (instead of merge)</span>
+        </label>
+      </div>
+
+      <div className="space-y-4">
+        {/* Google Sheet Import - Made more prominent */}
+        <div className="p-4 rounded-lg bg-white/5 border border-white/10">
+          <h3 className="font-semibold mb-2">Option 1: Import from Google Sheet (Recommended)</h3>
+          <p className="text-sm text-white/70 mb-3">Paste the URL of your public Google Sheet. The app will fetch and import the data.</p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Input
+              id="sheet-url"
+              value={sheetUrl}
+              onChange={(e) => setSheetUrl(e.target.value)}
+              placeholder="Paste Google Sheet URL here"
+            />
+            <button
+              onClick={importFromSheet}
+              disabled={busy || !sheetUrl}
+              className={cx("rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors whitespace-nowrap", (busy || !sheetUrl) && "opacity-50 cursor-not-allowed")}
+            >
+              {busy ? "Importing…" : "Fetch & Import"}
+            </button>
+          </div>
+          <p className="text-xs text-white/60 mt-2">
+            Tip: Use "File → Share → Publish to the web" and select CSV format for best results.
+          </p>
+        </div>
+
+        {/* CSV Upload */}
+        <div className="p-4 rounded-lg bg-white/5 border border-white/10">
+          <h3 className="font-semibold mb-2">Option 2: Upload a CSV File</h3>
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20"
+            onChange={(e) => onCsvFilePicked(e.target.files?.[0])}
+          />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function ProductsPanel({ products, setProducts, showToast, showUndoToast }) {
+  const [editing, setEditing] = useState(null);
+
+  function importRows(rows, sourceLabel, replaceMode) {
+    const normalized = rows.map(normalizeProductRow);
+    setProducts((prev) => {
+      if (replaceMode) return normalized;
+      const map = new Map(prev.map((p) => [p.id, p]));
+      normalized.forEach((n) => {
+        const existing = map.get(n.id);
+        map.set(n.id, { ...(existing || {}), ...n, createdAt: existing?.createdAt || n.createdAt, updatedAt: nowISO() });
+      });
+      return Array.from(map.values());
+    });
+    showToast(`Imported ${normalized.length} products from ${sourceLabel}${replaceMode ? " (replaced all)" : " (merged by id)"}.`, "success");
+  }
+
+  const handleSave = (updatedProduct) => {
+    if (updatedProduct.id) { // Editing
+      setProducts(prev => prev.map(p => p.id === updatedProduct.id ? { ...p, ...updatedProduct, updatedAt: nowISO() } : p));
+      showToast("Product updated successfully!", "success");
+    } else { // Adding
+      const newP = { ...updatedProduct, id: `P_${Date.now()}`, createdAt: nowISO(), updatedAt: nowISO(), deletedAt: null };
+      setProducts(prev => [newP, ...prev]);
+      showToast("Product added successfully!", "success");
+    }
+    setEditing(null);
+  };
+
+  const handleArchiveToggle = (id, active) => {
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, active: !active, deletedAt: active ? nowISO() : null, updatedAt: nowISO() } : p));
+    showToast(`Product ${active ? 'archived' : 'restored'}.`, 'info');
+  };
+
+  const downloadTemplate = () => {
+    const headers = "id,category,title,image,shareLink,contentDocUrl,productUrl,availabilityStart,availabilityEnd,commission,active";
+    const blob = new Blob([headers], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "fyne_products_template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-4">
+        <div className="flex flex-col sm:flex-row gap-2 justify-between">
+          <div>
+            <h2 className="text-lg font-semibold mb-1">Manage Products</h2>
+            <p className="text-white/70 text-sm">Add, edit, and bulk import your products here.</p>
+          </div>
+          <div className="flex gap-2 items-start">
+            <button onClick={() => setEditing({})} className="rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-2 text-sm font-semibold transition-colors whitespace-nowrap">Add New Product</button>
+          </div>
         </div>
       </Card>
-    );
-  }
 
-  /*************************
-   * ADMIN
-   *************************/
-  function AdminScreen({ products, setProducts, requests, setRequests, passwordResets, setPasswordResets, counts, me, onLogout, showToast, showUndoToast }) {
-    const [view, setView] = useState("requests");
+      <BulkImportCard onImport={importRows} showToast={showToast} />
 
-    return (
-      <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Stat label="Active Products" value={products.filter((p) => p.active && !p.deletedAt).length} />
-          <Stat label="Pending Tasks" value={counts["Pending"] || 0} />
-          <Stat label="Tasks to Review" value={counts["Video Submitted"] || 0} />
-          <Stat label="Completed Tasks" value={counts["Complete"] || 0} />
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <button onClick={() => setView("requests")} className={cx("rounded-lg border px-3 py-2 text-sm", view === "requests" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Tasks</button>
-          <button onClick={() => setView("products")} className={cx("rounded-lg border px-3 py-2 text-sm", view === "products" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Products</button>
-          <button onClick={() => setView("users")} className={cx("rounded-lg border px-3 py-2 text-sm", view === "users" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Users</button>
-          <button onClick={() => setView("password_resets")} className={cx("rounded-lg border px-3 py-2 text-sm relative", view === "password_resets" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>
-            Password Resets
-            {passwordResets.filter(r => r.status === 'pending').length > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center">
-                {passwordResets.filter(r => r.status === 'pending').length}
-              </span>
-            )}
-          </button>
-          <div className="flex-1" />
-          <button onClick={onLogout} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm">Logout</button>
-        </div>
-
-        {view === "requests" && <RequestsPanel requests={requests} setRequests={setRequests} showToast={showToast} showUndoToast={showUndoToast} />}
-        {view === "products" && <ProductsPanel products={products} setProducts={setProducts} showToast={showToast} showUndoToast={showUndoToast} />}
-        {view === "users" && <UsersPanel showToast={showToast} />}
-        {view === "password_resets" && <PasswordResetPanel resets={passwordResets} setResets={setPasswordResets} showToast={showToast} />}
-      </div>
-    );
-  }
-
-  function Stat({ label, value }) {
-    return (
-      <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-4 text-center">
-        <div className="text-3xl font-semibold">{value}</div>
-        <div className="text-xs uppercase tracking-wider text-white/60">{label}</div>
-      </div>
-    );
-  }
-
-  function UsersPanel({ showToast }) {
-    const [users, setUsers] = useState(() => listUsers());
-    function refresh() {
-      setUsers(listUsers());
-    }
-
-    const handleApprove = (id, name) => {
-      approveUser(id);
-      refresh();
-      showToast(`${name}'s account has been approved.`, 'success');
-    }
-
-    const handleReject = (id, name) => {
-      rejectUser(id);
-      refresh();
-      showToast(`${name}'s account has been rejected.`, 'info');
-    }
-
-    return (
       <Card className="p-4">
-        <h2 className="text-lg font-semibold mb-4">Affiliate Users</h2>
+        <h3 className="font-semibold mb-2">All Products</h3>
         <div className="grid grid-cols-1 gap-3">
-          {users.map((u) => (
-            <div key={u.id} className="rounded-xl border border-white/15 bg-white/5 p-3 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="font-medium truncate">{u.displayName || u.email}</div>
-                <div className="text-xs text-white/70 truncate">{u.email} • {u.tiktok} • {u.discord}</div>
+          {products.map(p => (
+            <div key={p.id} className="rounded-xl border border-white/15 bg-white/5 p-3 flex items-center gap-4">
+              <img src={p.image} alt={p.title} className="w-12 h-12 rounded-md object-cover" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium truncate">{p.title}</p>
+                <p className="text-xs text-white/60">{p.category}</p>
               </div>
               <div className="flex items-center gap-2">
-                <Badge tone={u.status === 'approved' ? 'success' : u.status === 'pending' ? 'info' : 'default'}>{u.status}</Badge>
-                {u.status === 'pending' && (
-                  <>
-                    <button onClick={() => handleApprove(u.id, u.displayName)} className="rounded-lg border border-emerald-400/40 bg-emerald-400/15 px-3 py-1 text-xs text-emerald-200 hover:bg-emerald-400/25 transition-colors">Approve</button>
-                    <button onClick={() => handleReject(u.id, u.displayName)} className="rounded-lg border border-rose-400/40 bg-rose-400/15 px-3 py-1 text-xs text-rose-200 hover:bg-rose-400/25 transition-colors">Reject</button>
-                  </>
-                )}
+                <Badge tone={p.active ? 'success' : 'default'}>{p.active ? 'Active' : 'Archived'}</Badge>
+                <button onClick={() => setEditing(p)} className="text-xs hover:underline text-sky-300">Edit</button>
+                <button onClick={() => handleArchiveToggle(p.id, p.active)} className="text-xs hover:underline">{p.active ? 'Archive' : 'Restore'}</button>
               </div>
             </div>
           ))}
-          {!users.length && <div className="text-white/70 text-center p-4">No affiliates have registered yet.</div>}
         </div>
       </Card>
-    );
+
+      {editing && <EditProductSheet product={editing} onClose={() => setEditing(null)} onSave={handleSave} />}
+    </div>
+  );
+}
+
+function EditProductSheet({ product, onClose, onSave }) {
+  const [p, setP] = useState({ ...product });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(p);
   }
 
-  function PasswordResetPanel({ resets, setResets, showToast }) {
-    const [newPassword, setNewPassword] = useState({});
-
-    const handlePasswordChange = (id, pass) => {
-      setNewPassword(prev => ({ ...prev, [id]: pass }));
-    }
-
-    const handleUpdatePassword = (reset) => {
-      const pass = newPassword[reset.id];
-      if (!pass || pass.length < 6) {
-        showToast("Password must be at least 6 characters.", "error");
-        return;
-      }
-      const success = updateUserPassword(reset.email, pass);
-      if (success) {
-        setResets(prev => prev.map(r => r.id === reset.id ? { ...r, status: 'completed' } : r));
-        showToast(`Password for ${reset.email} has been updated.`, "success");
-        showToast(`New pass for ${reset.email}: ${pass}. Please send securely.`, 'info', 10000);
-      } else {
-        showToast("Could not find a user with that email.", "error");
-      }
-    };
-
-    const pendingResets = resets.filter(r => r.status === 'pending');
-
-    return (
-      <Card className="p-4">
-        <h2 className="text-lg font-semibold mb-4">Password Reset Requests</h2>
-        {pendingResets.length === 0 ? (
-          <p className="text-white/70">No pending password reset requests.</p>
-        ) : (
-          <div className="space-y-3">
-            {pendingResets.map(reset => (
-              <div key={reset.id} className="rounded-xl border border-white/15 bg-white/5 p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-medium">{reset.email}</p>
-                  <p className="text-xs text-white/60">Requested on: {new Date(reset.createdAt).toLocaleString()}</p>
-                </div>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <Input
-                    id={`new-pass-${reset.id}`}
-                    type="text"
-                    placeholder="Enter new password"
-                    value={newPassword[reset.id] || ''}
-                    onChange={e => handlePasswordChange(reset.id, e.target.value)}
-                  />
-                  <button onClick={() => handleUpdatePassword(reset)} className="rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-3 py-2 text-sm font-semibold transition-colors">
-                    Set
-                  </button>
-                </div>
-              </div>
-            ))}
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-semibold">{product.id ? "Edit Product" : "Add New Product"}</h2>
+            <button type="button" onClick={onClose} className="text-sm hover:underline">Close</button>
           </div>
-        )}
-      </Card>
-    );
-  }
-
-
-  function RequestsPanel({ requests, setRequests, showToast, showUndoToast }) {
-    const [statusFilter, setStatusFilter] = useState("All");
-    const [q, setQ] = useState("");
-    const [selected, setSelected] = useState(new Set());
-
-    const filtered = useMemo(() => {
-      const term = q.trim().toLowerCase();
-      return requests
-        .filter((r) => (statusFilter === "All" ? true : r.status === statusFilter))
-        .filter((r) => term ?
-          r.productTitle.toLowerCase().includes(term) ||
-          r.affiliateTikTok?.toLowerCase().includes(term) ||
-          r.affiliateEmail?.toLowerCase().includes(term)
-          : true
-        )
-        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-    }, [requests, statusFilter, q]);
-
-    const SearchHighlight = ({ text, highlight }) => {
-      if (!highlight || !text) return text;
-      const parts = text.split(new RegExp(`(${highlight})`, 'gi'));
-      return (
-        <span>
-          {parts.map((part, i) =>
-            part.toLowerCase() === highlight.toLowerCase() ? (
-              <span key={i} className="bg-yellow-400/30 text-yellow-100">{part}</span>
-            ) : (
-              part
-            )
-          )}
-        </span>
-      );
-    };
-
-    const updateStatus = (ids, newStatus) => {
-      const originalRequests = [...requests];
-      let next = requests.map(r => {
-        if (ids.has(r.id)) {
-          const updatedTask = { ...r, status: newStatus, updatedAt: nowISO() };
-          return updatedTask;
-        }
-        return r;
-      });
-      setRequests(next);
-      showUndoToast(`${ids.size} task(s) updated to "${newStatus}".`, () => {
-        setRequests(originalRequests);
-        showToast("Update reverted.", "info");
-      });
-      setSelected(new Set());
-    };
-
-    const handleSelect = (id) => {
-      const next = new Set(selected);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      setSelected(next);
-    };
-
-    const handleSelectAll = (e) => {
-      if (e.target.checked) {
-        setSelected(new Set(filtered.map(r => r.id)));
-      } else {
-        setSelected(new Set());
-      }
-    }
-
-    function exportCSV() {
-      const rows = filtered;
-      if (!rows.length) {
-        showToast("No tasks to export.", "info");
-        return;
-      }
-      const csv = Papa.unparse(rows);
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `fyne_tasks_${Date.now()}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast("CSV export started.", "success");
-    }
-
-    return (
-      <Card className="p-4">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 flex-wrap">
-            {["All", ...STATUS].map(s => (
-              <button
-                key={s}
-                onClick={() => setStatusFilter(s)}
-                className={cx("rounded-full border px-3 py-1 text-xs font-medium transition-colors", statusFilter === s ? "bg-white/20 border-white/30" : "bg-white/5 border-white/10 hover:bg-white/10")}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search..." className="flex-grow rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm" />
-            <button onClick={exportCSV} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm">Export</button>
-          </div>
-        </div>
-
-        {selected.size > 0 && (
-          <div className="mb-4 p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center gap-4">
-            <span className="text-sm font-medium">{selected.size} selected</span>
-            <select
-              onChange={e => updateStatus(selected, e.target.value)}
-              className="rounded-lg border border-white/20 bg-slate-800 px-3 py-1.5 text-sm"
-              defaultValue=""
-            >
-              <option value="" disabled>Set status to...</option>
-              {STATUS.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-        )}
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="border-b border-white/10 text-xs text-white/60 uppercase">
-              <tr>
-                <th className="p-3 w-8"><input type="checkbox" onChange={handleSelectAll} checked={selected.size === filtered.length && filtered.length > 0} className="rounded" /></th>
-                <th className="p-3">Affiliate</th>
-                <th className="p-3">Product</th>
-                <th className="p-3">Submissions</th>
-                <th className="p-3">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((r) => (
-                <tr key={r.id} className="border-b border-white/10 hover:bg-white/5">
-                  <td className="p-3"><input type="checkbox" checked={selected.has(r.id)} onChange={() => handleSelect(r.id)} className="rounded" /></td>
-                  <td className="p-3">
-                    <div className="font-medium"><SearchHighlight text={r.affiliateTikTok || ''} highlight={q} /></div>
-                    <div className="text-xs text-white/60"><SearchHighlight text={r.affiliateEmail || ''} highlight={q} /></div>
-                  </td>
-                  <td className="p-3"><SearchHighlight text={r.productTitle} highlight={q} /></td>
-                  <td className="p-3">
-                    {r.videoLink && <a className="underline truncate block max-w-xs" href={r.videoLink} target="_blank" rel="noreferrer">Video Link</a>}
-                    {r.adCode && <div className="font-mono text-xs mt-1">Code: {r.adCode}</div>}
-                  </td>
-                  <td className="p-3">
-                    <select value={r.status} onChange={(e) => updateStatus(new Set([r.id]), e.target.value)} className="rounded-lg border border-white/20 bg-slate-800 px-2 py-1 text-xs">
-                      {STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {filtered.length === 0 && <div className="text-center p-6 text-white/60">No tasks match your filters.</div>}
-        </div>
-      </Card>
-    );
-  }
-
-  function BulkImportCard({ onImport, showToast }) {
-    const [sheetUrl, setSheetUrl] = useState("");
-    const [busy, setBusy] = useState(false);
-    const [replaceMode, setReplaceMode] = useState(false);
-
-    async function importFromSheet() {
-      if (!sheetUrl) return;
-      setBusy(true);
-      try {
-        const csvUrl = sheetUrlToCsv(sheetUrl);
-        const res = await fetch(csvUrl, { headers: { "Accept": "text/csv" } });
-        if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
-        const text = await res.text();
-        const rows = parseCSVText(text);
-        onImport(rows, "Google Sheet", replaceMode);
-        setSheetUrl("");
-      } catch (e) {
-        showToast(
-          `Sheet import error: ${e.message}. Make sure the sheet is public or published to the web as a CSV.`,
-          "error",
-          5000
-        );
-      } finally {
-        setBusy(false);
-      }
-    }
-
-    function onCsvFilePicked(file) {
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const rows = parseCSVText(String(reader.result ?? ""));
-          onImport(rows, "CSV file", replaceMode);
-        } catch (err) {
-          showToast(`CSV error: ${err.message}`, "error");
-        }
-      };
-      reader.readAsText(file);
-    }
-
-    return (
-      <Card className="p-4">
-        <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4">
-          <h2 className="text-lg font-semibold">Bulk Upload Products</h2>
-          <label className="flex items-center gap-2 text-xs mt-2 sm:mt-0 cursor-pointer">
-            <input type="checkbox" checked={replaceMode} onChange={(e) => setReplaceMode(e.target.checked)} className="rounded" />
-            <span>Replace all products (instead of merge)</span>
-          </label>
-        </div>
-
-        <div className="space-y-4">
-          {/* Google Sheet Import - Made more prominent */}
-          <div className="p-4 rounded-lg bg-white/5 border border-white/10">
-            <h3 className="font-semibold mb-2">Option 1: Import from Google Sheet (Recommended)</h3>
-            <p className="text-sm text-white/70 mb-3">Paste the URL of your public Google Sheet. The app will fetch and import the data.</p>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Input
-                id="sheet-url"
-                value={sheetUrl}
-                onChange={(e) => setSheetUrl(e.target.value)}
-                placeholder="Paste Google Sheet URL here"
-              />
-              <button
-                onClick={importFromSheet}
-                disabled={busy || !sheetUrl}
-                className={cx("rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors whitespace-nowrap", (busy || !sheetUrl) && "opacity-50 cursor-not-allowed")}
-              >
-                {busy ? "Importing…" : "Fetch & Import"}
-              </button>
-            </div>
-            <p className="text-xs text-white/60 mt-2">
-              Tip: Use "File → Share → Publish to the web" and select CSV format for best results.
-            </p>
-          </div>
-
-          {/* CSV Upload */}
-          <div className="p-4 rounded-lg bg-white/5 border border-white/10">
-            <h3 className="font-semibold mb-2">Option 2: Upload a CSV File</h3>
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20"
-              onChange={(e) => onCsvFilePicked(e.target.files?.[0])}
-            />
-          </div>
-        </div>
-      </Card>
-    );
-  }
-
-  function ProductsPanel({ products, setProducts, showToast, showUndoToast }) {
-    const [editing, setEditing] = useState(null);
-
-    function importRows(rows, sourceLabel, replaceMode) {
-      const normalized = rows.map(normalizeProductRow);
-      setProducts((prev) => {
-        if (replaceMode) return normalized;
-        const map = new Map(prev.map((p) => [p.id, p]));
-        normalized.forEach((n) => {
-          const existing = map.get(n.id);
-          map.set(n.id, { ...(existing || {}), ...n, createdAt: existing?.createdAt || n.createdAt, updatedAt: nowISO() });
-        });
-        return Array.from(map.values());
-      });
-      showToast(`Imported ${normalized.length} products from ${sourceLabel}${replaceMode ? " (replaced all)" : " (merged by id)"}.`, "success");
-    }
-
-    const handleSave = (updatedProduct) => {
-      if (updatedProduct.id) { // Editing
-        setProducts(prev => prev.map(p => p.id === updatedProduct.id ? { ...p, ...updatedProduct, updatedAt: nowISO() } : p));
-        showToast("Product updated successfully!", "success");
-      } else { // Adding
-        const newP = { ...updatedProduct, id: `P_${Date.now()}`, createdAt: nowISO(), updatedAt: nowISO(), deletedAt: null };
-        setProducts(prev => [newP, ...prev]);
-        showToast("Product added successfully!", "success");
-      }
-      setEditing(null);
-    };
-
-    const handleArchiveToggle = (id, active) => {
-      setProducts(prev => prev.map(p => p.id === id ? { ...p, active: !active, deletedAt: active ? nowISO() : null, updatedAt: nowISO() } : p));
-      showToast(`Product ${active ? 'archived' : 'restored'}.`, 'info');
-    };
-
-    const downloadTemplate = () => {
-      const headers = "id,category,title,image,shareLink,contentDocUrl,productUrl,availabilityStart,availabilityEnd,commission,active";
-      const blob = new Blob([headers], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "fyne_products_template.csv";
-      a.click();
-      URL.revokeObjectURL(url);
-    };
-
-    return (
-      <div className="space-y-4">
-        <Card className="p-4">
-          <div className="flex flex-col sm:flex-row gap-2 justify-between">
+          <Input id="prod-title" label="Title" value={p.title || ''} onChange={(e) => setP({ ...p, title: e.target.value })} required />
+          <Input id="prod-cat" label="Category" value={p.category || ''} onChange={(e) => setP({ ...p, category: e.target.value })} required />
+          <Input id="prod-img" label="Image URL" value={p.image || ''} onChange={(e) => setP({ ...p, image: e.target.value })} required />
+          <Input id="prod-share" label="Affiliate Share Link" value={p.shareLink || ''} onChange={(e) => setP({ ...p, shareLink: e.target.value })} />
+          <Input id="prod-content" label="Content Doc URL" value={p.contentDocUrl || ''} onChange={(e) => setP({ ...p, contentDocUrl: e.target.value })} />
+          <Input id="prod-url" label="Product Page URL" value={p.productUrl || ''} onChange={(e) => setP({ ...p, productUrl: e.target.value })} />
+          <Input id="prod-comm" label="Commission" value={p.commission || ''} onChange={(e) => setP({ ...p, commission: e.target.value })} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <h2 className="text-lg font-semibold mb-1">Manage Products</h2>
-              <p className="text-white/70 text-sm">Add, edit, and bulk import your products here.</p>
+              <label className="block text-xs font-medium text-white/80 mb-1.5">Availability Start</label>
+              <input type="datetime-local" value={toDTLocal(p.availabilityStart)} onChange={(e) => setP({ ...p, availabilityStart: fromDTLocal(e.target.value) })} className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2.5 text-sm" />
             </div>
-            <div className="flex gap-2 items-start">
-              <button onClick={() => setEditing({})} className="rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-2 text-sm font-semibold transition-colors whitespace-nowrap">Add New Product</button>
+            <div>
+              <label className="block text-xs font-medium text-white/80 mb-1.5">Availability End</label>
+              <input type="datetime-local" value={toDTLocal(p.availabilityEnd)} onChange={(e) => setP({ ...p, availabilityEnd: fromDTLocal(e.target.value) })} className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2.5 text-sm" />
             </div>
           </div>
-        </Card>
-
-        <BulkImportCard onImport={importRows} showToast={showToast} />
-
-        <Card className="p-4">
-          <h3 className="font-semibold mb-2">All Products</h3>
-          <div className="grid grid-cols-1 gap-3">
-            {products.map(p => (
-              <div key={p.id} className="rounded-xl border border-white/15 bg-white/5 p-3 flex items-center gap-4">
-                <img src={p.image} alt={p.title} className="w-12 h-12 rounded-md object-cover" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{p.title}</p>
-                  <p className="text-xs text-white/60">{p.category}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge tone={p.active ? 'success' : 'default'}>{p.active ? 'Active' : 'Archived'}</Badge>
-                  <button onClick={() => setEditing(p)} className="text-xs hover:underline text-sky-300">Edit</button>
-                  <button onClick={() => handleArchiveToggle(p.id, p.active)} className="text-xs hover:underline">{p.active ? 'Archive' : 'Restore'}</button>
-                </div>
-              </div>
-            ))}
+          <div className="mt-6 flex justify-end gap-3">
+            <button type="button" onClick={onClose} className="rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm">Cancel</button>
+            <button type="submit" className="rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-6 py-2 text-sm font-semibold transition-colors">Save Product</button>
           </div>
-        </Card>
-
-        {editing && <EditProductSheet product={editing} onClose={() => setEditing(null)} onSave={handleSave} />}
-      </div>
-    );
-  }
-
-  function EditProductSheet({ product, onClose, onSave }) {
-    const [p, setP] = useState({ ...product });
-
-    const handleSubmit = (e) => {
-      e.preventDefault();
-      onSave(p);
-    }
-
-    return (
-      <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-        <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-          <form onSubmit={handleSubmit} className="p-6 space-y-4">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-lg font-semibold">{product.id ? "Edit Product" : "Add New Product"}</h2>
-              <button type="button" onClick={onClose} className="text-sm hover:underline">Close</button>
-            </div>
-            <Input id="prod-title" label="Title" value={p.title || ''} onChange={(e) => setP({ ...p, title: e.target.value })} required />
-            <Input id="prod-cat" label="Category" value={p.category || ''} onChange={(e) => setP({ ...p, category: e.target.value })} required />
-            <Input id="prod-img" label="Image URL" value={p.image || ''} onChange={(e) => setP({ ...p, image: e.target.value })} required />
-            <Input id="prod-share" label="Affiliate Share Link" value={p.shareLink || ''} onChange={(e) => setP({ ...p, shareLink: e.target.value })} />
-            <Input id="prod-content" label="Content Doc URL" value={p.contentDocUrl || ''} onChange={(e) => setP({ ...p, contentDocUrl: e.target.value })} />
-            <Input id="prod-url" label="Product Page URL" value={p.productUrl || ''} onChange={(e) => setP({ ...p, productUrl: e.target.value })} />
-            <Input id="prod-comm" label="Commission" value={p.commission || ''} onChange={(e) => setP({ ...p, commission: e.target.value })} />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-white/80 mb-1.5">Availability Start</label>
-                <input type="datetime-local" value={toDTLocal(p.availabilityStart)} onChange={(e) => setP({ ...p, availabilityStart: fromDTLocal(e.target.value) })} className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2.5 text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-white/80 mb-1.5">Availability End</label>
-                <input type="datetime-local" value={toDTLocal(p.availabilityEnd)} onChange={(e) => setP({ ...p, availabilityEnd: fromDTLocal(e.target.value) })} className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2.5 text-sm" />
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <button type="button" onClick={onClose} className="rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm">Cancel</button>
-              <button type="submit" className="rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-6 py-2 text-sm font-semibold transition-colors">Save Product</button>
-            </div>
-          </form>
-        </Card>
-      </div>
-    );
-  }
+        </form>
+      </Card>
+    </div>
+  );
+}
