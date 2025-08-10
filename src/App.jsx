@@ -51,12 +51,13 @@ import {
  *
  ******************************************************************************/
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: "AIzaSyDTzNzAnlq1_Gzzu8-3fPRXZIb-bb0OY7o",
+  authDomain: "fyne-affiliate.firebaseapp.com",
+  projectId: "fyne-affiliate",
+  storageBucket: "fyne-affiliate.firebasestorage.app",
+  messagingSenderId: "851062670683",
+  appId: "1:851062670683:web:f89dba1c03f14aabdd867e",
+  measurementId: "G-L08TTDYEW1"
 };
 
 // Initialize Firebase
