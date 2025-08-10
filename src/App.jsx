@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
+
 
 // Firebase Imports - We now use a real database!
 import { initializeApp } from "firebase/app";
@@ -23,7 +24,6 @@ import {
   orderBy,
   writeBatch,
   serverTimestamp,
-  deleteDoc,
 } from "firebase/firestore";
 
 
@@ -50,14 +50,14 @@ import {
  *
  ******************************************************************************/
 const firebaseConfig = {
-  apiKey: "AIzaSyDTzNzAnlq1_Gzzu8-3fPRXZIb-bb0OY7o",
-  authDomain: "fyne-affiliate.firebaseapp.com",
-  projectId: "fyne-affiliate",
-  storageBucket: "fyne-affiliate.firebasestorage.app",
-  messagingSenderId: "851062670683",
-  appId: "1:851062670683:web:f89dba1c03f14aabdd867e",
-  measurementId: "G-L08TTDYEW1"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
+
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -656,7 +656,9 @@ function AffiliateScreen({ currentUser, products, requests, showToast }) {
       .filter((p) => (cat === "All" ? true : p.category === cat))
       .filter((p) => (t ? p.title.toLowerCase().includes(t) || p.category.toLowerCase().includes(t) : true))
       .filter((p) => !myTaskByProduct[p.id] || myTaskByProduct[p.id]?.status === 'Complete');
-    arr.sort((a, b) => (sort === "newest" ? b.createdAt.seconds - a.createdAt.seconds : a.createdAt.seconds - b.createdAt.seconds));
+    arr.sort((a, b) => (sort === "newest"
+      ? (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0)
+      : (a.createdAt?.seconds ?? 0) - (b.createdAt?.seconds ?? 0)));
     return arr;
   }, [products, q, cat, myTaskByProduct, sort]);
 
