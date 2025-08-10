@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import Papa from "paparse";
 
 // Firebase Imports - We now use a real database!
 import { initializeApp } from "firebase/app";
