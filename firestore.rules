@@ -1,0 +1,313 @@
+// ==============================
+// FILE: firestore.rules
+// ==============================
+// Put this in the root of your project as firestore.rules
+// Then run: firebase deploy --only firestore:rules
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() { return request.auth != null; }
+    function userDoc(uid) { return get(/databases/$(database)/documents/users/$(uid)); }
+    function isAdmin() { return isSignedIn() && userDoc(request.auth.uid).data.role == "admin"; }
+    function isApproved() { return isSignedIn() && userDoc(request.auth.uid).data.status == "approved"; }
+
+    match /products/{id} {
+      allow read: if true;              // public
+      allow write: if isAdmin();        // admin only
+    }
+
+    match /users/{uid} {
+      allow read: if isSignedIn() && (uid == request.auth.uid || isAdmin());
+      allow write: if isAdmin() || (isSignedIn() && uid == request.auth.uid);
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.affiliateUid == request.auth.uid);
+      allow create: if isApproved() && request.resource.data.affiliateUid == request.auth.uid;
+      allow update: if isAdmin() || (
+        isSignedIn() &&
+        resource.data.affiliateUid == request.auth.uid &&
+        resource.data.status == "Pending" &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly(["videoLink","adCode","updatedAt"]) 
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /passwordResets/{id} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if isAdmin();
+    }
+  }
+}
+
+
+// ==============================
+// FILE: src/utils/auth.js
+// ==============================
+// Drop-in auth helpers (FREE tier: no Cloud Functions).
+// Replace any old local-storage auth with these.
+
+import { auth, db } from "../firebase";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  sendPasswordResetEmail,
+} from "firebase/auth";
+import {
+  collection, doc, getDoc, getDocs, onSnapshot,
+  query, orderBy, setDoc, updateDoc, serverTimestamp
+} from "firebase/firestore";
+
+// --- Session helpers ---
+export function currentUser() { return auth.currentUser || null; }
+export function onAuth(cb) { return onAuthStateChanged(auth, cb); }
+
+export async function getMyProfile() {
+  const u = auth.currentUser; if (!u) return null;
+  const snap = await getDoc(doc(db, "users", u.uid));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+export async function isAdmin() { return (await getMyProfile())?.role === "admin"; }
+export async function isAffiliate() { return (await getMyProfile())?.role === "affiliate"; }
+
+// --- Auth flows ---
+export async function registerAffiliate({ email, password, displayName, tiktok, discord }) {
+  const cred = await createUserWithEmailAndPassword(auth, email, password);
+  await setDoc(doc(db, "users", cred.user.uid), {
+    email,
+    displayName: displayName || "",
+    tiktok: tiktok || "",
+    discord: discord || "",
+    role: "affiliate",
+    status: "pending",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return cred.user;
+}
+export async function loginAffiliate(email, password) {
+  const { user } = await signInWithEmailAndPassword(auth, email, password);
+  const profile = await getMyProfile();
+  return { user, profile };
+}
+export async function loginAdmin(email, password) {
+  const { user } = await signInWithEmailAndPassword(auth, email, password);
+  const profile = await getMyProfile();
+  if (profile?.role !== "admin") throw new Error("This account is not an admin.");
+  return { user, profile };
+}
+export function logout() { return signOut(auth); }
+
+// --- Password reset (FREE) ---
+const actionCodeSettings = {
+  url: (import.meta.env.VITE_APP_URL || window.location.origin),
+  handleCodeInApp: false,
+};
+export function requestPasswordReset(email){
+  return sendPasswordResetEmail(auth, email, actionCodeSettings);
+}
+export function adminTriggerPasswordReset(email){
+  return sendPasswordResetEmail(auth, email, actionCodeSettings);
+}
+
+// --- Users admin ---
+export function listUsersLive(cb){
+  const q = query(collection(db, "users"), orderBy("createdAt","desc"));
+  return onSnapshot(q, s => cb(s.docs.map(d=>({id:d.id,...d.data()}))));
+}
+export async function listUsers(){
+  const q = query(collection(db, "users"));
+  const s = await getDocs(q);
+  return s.docs.map(d=>({id:d.id,...d.data()}));
+}
+export async function updateUser(uid, data){
+  await updateDoc(doc(db, "users", uid), { ...data, updatedAt: serverTimestamp() });
+}
+export async function approveUser(uid){
+  await updateDoc(doc(db, "users", uid), { status: "approved", updatedAt: serverTimestamp() });
+}
+export async function rejectUser(uid){
+  await updateDoc(doc(db, "users", uid), { status: "rejected", updatedAt: serverTimestamp() });
+}
+
+// --- Convenience ---
+export function profileFromUser(u, p){
+  return {
+    uid: u?.uid,
+    email: u?.email || p?.email || "",
+    displayName: p?.displayName || u?.displayName || "",
+    role: p?.role || "affiliate",
+    status: p?.status || "pending",
+    tiktok: p?.tiktok || "",
+    discord: p?.discord || "",
+  };
+}
+
+
+// ==============================
+// FILE: src/utils/tasks.js
+// ==============================
+import { db } from "../firebase";
+import {
+  addDoc, collection, doc, onSnapshot, query,
+  where, orderBy, updateDoc, serverTimestamp, getDocs
+} from "firebase/firestore";
+
+export function listenMyTasks(uid, cb){
+  const q = query(collection(db, "tasks"), where("affiliateUid","==",uid), orderBy("createdAt","desc"));
+  return onSnapshot(q, s => cb(s.docs.map(d=>({id:d.id,...d.data()}))));
+}
+export function listenAllTasks(cb){
+  const q = query(collection(db, "tasks"), orderBy("createdAt","desc"));
+  return onSnapshot(q, s => cb(s.docs.map(d=>({id:d.id,...d.data()}))));
+}
+export async function listAllTasksOnce(){
+  const q = query(collection(db, "tasks"), orderBy("createdAt","desc"));
+  const s = await getDocs(q); return s.docs.map(d=>({id:d.id,...d.data()}));
+}
+export async function createTask({ uid, product, affiliate }){
+  return addDoc(collection(db, "tasks"), {
+    productId: product.id || product.productId || "",
+    productTitle: product.title || "",
+    shareLink: product.shareLink || "",
+    status: "Pending",
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    affiliateUid: uid,
+    affiliateEmail: affiliate.email || "",
+    affiliateTikTok: affiliate.tiktok || "",
+    affiliateDiscord: affiliate.discord || "",
+    videoLink: "", adCode: "", sales: 0, commission: 0
+  });
+}
+export async function submitTask(taskId, { videoLink, adCode }){
+  await updateDoc(doc(db, "tasks", taskId), {
+    videoLink: videoLink||"", adCode: adCode||"",
+    status: "Video Submitted", updatedAt: serverTimestamp()
+  });
+}
+export async function setTaskStatus(taskId, status, extra={}){
+  await updateDoc(doc(db, "tasks", taskId), { status, ...extra, updatedAt: serverTimestamp() });
+}
+
+
+// ==============================
+// FILE: src/utils/products.js
+// ==============================
+import { db } from "../firebase";
+import { addDoc, collection, doc, onSnapshot, query, setDoc } from "firebase/firestore";
+import Papa from "papaparse";
+
+export function listenProducts(cb){
+  const q = query(collection(db, "products"));
+  return onSnapshot(q, s => cb(s.docs.map(d=>({id:d.id,...d.data()}))));
+}
+
+// Publish your Google Sheet to the web as CSV (File → Share → Publish to web → CSV)
+// Then pass that CSV URL here. Adjust mapping if your column headers differ.
+export async function importProductsFromPublishedCsv(csvUrl, mapping = {
+  id: "id",
+  title: "title",
+  category: "category",
+  image: "image",
+  shareLink: "shareLink",
+  commission: "commission",
+  active: "active"
+}) {
+  const res = await fetch(csvUrl);
+  const text = await res.text();
+  const parsed = await new Promise((resolve, reject) => {
+    Papa.parse(text, { header: true, skipEmptyLines: true, complete: r => resolve(r.data), error: reject });
+  });
+
+  for (const row of parsed) {
+    const product = {
+      title: row[mapping.title] || "",
+      category: row[mapping.category] || "",
+      image: row[mapping.image] || "",
+      shareLink: row[mapping.shareLink] || "",
+      commission: Number(row[mapping.commission] || 0),
+      active: String(row[mapping.active] || "true").toLowerCase() !== "false",
+    };
+    const explicitId = row[mapping.id] && String(row[mapping.id]).trim();
+    if (explicitId) await setDoc(doc(db, "products", explicitId), product);
+    else await addDoc(collection(db, "products"), product);
+  }
+  return { count: parsed.length };
+}
+
+
+// ==============================
+// FILE: src/utils/migrate.js
+// ==============================
+// One-time helper to push your previous localStorage seed up to Firestore.
+// Use ONLY if you used localStorage before. Call from an admin-only button.
+import { db } from "../firebase";
+import { addDoc, setDoc, doc, collection, serverTimestamp } from "firebase/firestore";
+
+export async function migrateLocal({ usersKey, tasksKey, productsKey }) {
+  const parse = (k) => {
+    const raw = localStorage.getItem(k);
+    if (!raw) return [];
+    try { return JSON.parse(raw); } catch { return []; }
+  };
+
+  const users = parse(usersKey);
+  const tasks = parse(tasksKey);
+  const products = parse(productsKey);
+
+  for (const u of users) {
+    const id = u.id || u.uid; if (!id) continue;
+    await setDoc(doc(db, "users", id), {
+      email: u.email || "",
+      displayName: u.displayName || "",
+      role: u.role || "affiliate",
+      status: u.status || "pending",
+      tiktok: u.tiktok || "",
+      discord: u.discord || "",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  for (const p of products) {
+    const id = p.id || p.productId;
+    const data = {
+      title: p.title || "",
+      category: p.category || "",
+      image: p.image || "",
+      shareLink: p.shareLink || "",
+      commission: Number(p.commission || 0),
+      active: p.active !== false,
+    };
+    if (id) await setDoc(doc(db, "products", id), data);
+    else await addDoc(collection(db, "products"), data);
+  }
+
+  for (const t of tasks) {
+    await addDoc(collection(db, "tasks"), {
+      productId: t.productId || "",
+      productTitle: t.productTitle || "",
+      shareLink: t.shareLink || "",
+      status: t.status || "Pending",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      affiliateUid: t.affiliateUid || "",
+      affiliateEmail: t.affiliateEmail || "",
+      affiliateTikTok: t.affiliateTikTok || "",
+      affiliateDiscord: t.affiliateDiscord || "",
+      videoLink: t.videoLink || "",
+      adCode: t.adCode || "",
+      sales: Number(t.sales || 0),
+      commission: Number(t.commission || 0),
+    });
+  }
+
+  return {
+    users: users.length,
+    products: products.length,
+    tasks: tasks.length,
+  };
+}

@@ -1,5 +1,134 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import Papa from "papaparse";
+import ForgotPassword from "./components/ForgotPassword.jsx";
+
+// Firebase-backed helpers
+import {
+  onAuth,
+  getMyProfile,
+  loginAffiliate,
+  loginAdmin,
+  registerAffiliate,
+  logout,
+  approveUser,
+  rejectUser,
+  updateUser,
+  listUsersLive,
+  adminTriggerPasswordReset,
+} from "./utils/auth";
+
+import {
+  listenProducts,
+  importProductsFromPublishedCsv,
+} from "./utils/products";
+
+import {
+  listenMyTasks,
+  listenAllTasks,
+  createTask,
+  submitTask,
+  setTaskStatus,
+} from "./utils/tasks";
+
+
+const [firebaseUser, setFirebaseUser] = useState(null);  // raw Firebase user
+const [profile, setProfile] = useState(null);            // Firestore users/{uid} doc
+const [products, setProducts] = useState([]);            // products collection
+const [myTasks, setMyTasks] = useState([]);              // affiliate-only
+const [allTasks, setAllTasks] = useState([]);            // admin-only
+const [users, setUsers] = useState([]);                  // admin users table
+
+useEffect(() => {
+  const stop = onAuth(async (u) => {
+    setFirebaseUser(u || null);
+    if (u) {
+      const p = await getMyProfile();
+      setProfile(p);
+    } else {
+      setProfile(null);
+    }
+  });
+  return () => stop();
+}, []);
+
+useEffect(() => {
+  const stop = listenProducts(setProducts);
+  return () => stop();
+}, []);
+
+
+useEffect(() => {
+  if (!firebaseUser || !profile) return;
+  let stop = () => { };
+
+  if (profile.role === "admin") {
+    stop = listenAllTasks(setAllTasks);
+  } else if (profile.role === "affiliate") {
+    stop = listenMyTasks(firebaseUser.uid, setMyTasks);
+  }
+
+  return () => stop();
+}, [firebaseUser, profile]);
+
+
+// Login (affiliate)
+await loginAffiliate(email, password);
+// Login (admin)
+await loginAdmin(email, password);
+// Register (affiliate)
+await registerAffiliate({ email, password, displayName, tiktok, discord });
+// Logout
+await logout();
+
+// Create task (affiliate)
+const me = profile; // we fetched in onAuth effect
+await createTask({ uid: firebaseUser.uid, product: selectedProduct, affiliate: me });
+
+// Affiliate submits video/ad code
+await submitTask(task.id, { videoLink, adCode });
+
+// Admin updates status
+await setTaskStatus(taskId, "Complete", { sales: 3, commission: 1200 });
+
+// live list
+useEffect(() => {
+  if (profile?.role !== "admin") return;
+  const stop = listUsersLive(setUsers);
+  return () => stop();
+}, [profile]);
+
+// approve/reject
+await approveUser(uid);
+await rejectUser(uid);
+
+// password reset email (free plan)
+await adminTriggerPasswordReset(user.email);
+
+// 1) Publish the Google Sheet tab as CSV (File → Share → Publish to web → CSV)
+// 2) Put the CSV url below:
+await importProductsFromPublishedCsv("PASTE_CSV_URL_HERE", {
+  id: "id",             // change to your column names if different
+  title: "title",
+  category: "category",
+  image: "image",
+  shareLink: "shareLink",
+  commission: "commission",
+  active: "active",
+});
+alert("Imported!");
+
+
+// …
+<button
+  className="px-2 py-1 rounded bg-white/10 border border-white/20"
+  onClick={() =>
+    adminTriggerPasswordReset(user.email)
+      .then(() => alert("Reset email sent"))
+      .catch((e) => alert(e.message))
+  }
+>
+  Send reset email
+</button>
 
 /*************************
  * PLACEHOLDER DEPENDENCIES
@@ -811,7 +940,7 @@ function AdminLogin({ onSuccess, showToast }) {
   );
 }
 
-function AffiliateAuthPanel({ onAuthChange, showToast, passwordResets, setPasswordResets }) {
+function AffiliateAuthPanel({ onAuthChange, showToast }) {
   const [mode, setMode] = useState("login"); // login | register | forgot
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -867,16 +996,6 @@ function AffiliateAuthPanel({ onAuthChange, showToast, passwordResets, setPasswo
     }
   }
 
-  function doForgotPassword(e) {
-    e.preventDefault();
-    if (!validate(['email'])) return;
-
-    const newRequest = { id: `RESET_${Date.now()}`, email, createdAt: nowISO(), status: 'pending' };
-    setPasswordResets(prev => [...prev, newRequest]);
-    showToast("Password reset request sent. An admin will contact you.", "success");
-    setMode("login");
-  }
-
   return (
     <Card className="p-6 max-w-md mx-auto">
       <div className="flex gap-2 mb-4 border-b border-white/10 pb-4">
@@ -910,16 +1029,12 @@ function AffiliateAuthPanel({ onAuthChange, showToast, passwordResets, setPasswo
       )}
 
       {mode === "forgot" && (
-        <form onSubmit={doForgotPassword} className="space-y-4">
-          <h3 className="font-semibold">Request Password Reset</h3>
-          <p className="text-sm text-white/70">Enter your account email. An admin will be notified to help you reset your password.</p>
-          <Input id="forgot-email" label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" error={err.email} required />
-          <button type="submit" className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">Send Request</button>
-        </form>
+        <ForgotPassword onBack={() => setMode("login")} />
       )}
     </Card>
   );
 }
+
 
 /*************************
  * AFFILIATE ONBOARDING
