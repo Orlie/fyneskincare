@@ -1,7 +1,6 @@
 // src/components/AffiliateMyTasks.jsx
 import React from "react";
-import { getAuth } from "firebase/auth";
-import { getTasksByUser, updateTask } from "../utils/firestore";
+import { listTasksByUser, updateTask } from "../utils/auth";
 
 const STATUS = ["Pending", "Video Submitted", "Ad Code Submitted", "Complete"];
 
@@ -10,20 +9,17 @@ function Card({ className = "", children }) {
     return <div className={cx("rounded-2xl border border-white/15 bg-white/5 p-3", className)}>{children}</div>;
 }
 
-export default function AffiliateTasks({ showToast }) {
+export default function AffiliateMyTasks({ me }) {
     const [tasks, setTasks] = React.useState([]);
     const [busy, setBusy] = React.useState(false);
 
-    const auth = getAuth();
-    const user = auth.currentUser;
+    const canLoad = !!me?.id;
 
-    const canLoad = !!user?.uid;
-
-    const refresh = React.useCallback(async () => {
+    const refresh = React.useCallback(() => {
         if (!canLoad) return;
         setBusy(true);
         try {
-            const data = await getTasksByUser(user.uid) || [];
+            const data = listTasksByUser(me.id) || [];
             // Ensure stable shape
             setTasks(
                 data.map((t) => ({
@@ -36,7 +32,7 @@ export default function AffiliateTasks({ showToast }) {
         } finally {
             setBusy(false);
         }
-    }, [canLoad, user?.uid]);
+    }, [canLoad, me?.id]);
 
     React.useEffect(() => { refresh(); }, [refresh]);
 
@@ -46,7 +42,7 @@ export default function AffiliateTasks({ showToast }) {
 
     async function save(id, patch) {
         setLocal(id, patch);
-        await updateTask(id, patch);
+        updateTask(id, patch); // persists to localStorage via auth.js
     }
 
     if (!canLoad) {
