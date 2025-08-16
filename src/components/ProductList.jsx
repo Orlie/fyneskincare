@@ -60,35 +60,20 @@ function ProductList({ products, onCreateTask, requests }) {
   }
 
   return (
-    <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif', color: '#ffffff' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+    <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif', color: '#ffffff', padding: '20px' }}>
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
         <input
           type="text"
           placeholder="Search products..."
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          style={{ 
-            padding: '12px 18px', 
-            borderRadius: '12px', 
-            border: '1px solid #555555', 
-            backgroundColor: '#444444', 
-            color: '#ffffff', 
-            fontSize: '16px',
-            width: '300px'
-          }}
+          className="w-full p-3 rounded-xl border border-gray-700 bg-gray-800 text-white text-base"
         />
-        <div style={{ display: 'flex', gap: '20px' }}>
+        <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            style={{ 
-              padding: '12px 18px', 
-              borderRadius: '12px', 
-              border: '1px solid #555555', 
-              backgroundColor: '#444444', 
-              color: '#ffffff', 
-              fontSize: '16px' 
-            }}
+            className="w-full md:w-auto p-3 rounded-xl border border-gray-700 bg-gray-800 text-white text-base"
           >
             <option value="">All Categories</option>
             {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
@@ -96,69 +81,44 @@ function ProductList({ products, onCreateTask, requests }) {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            style={{ 
-              padding: '12px 18px', 
-              borderRadius: '12px', 
-              border: '1px solid #555555', 
-              backgroundColor: '#444444', 
-              color: '#ffffff', 
-              fontSize: '16px' 
-            }}
+            className="w-full md:w-auto p-3 rounded-xl border border-gray-700 bg-gray-800 text-white text-base"
           >
             <option value="newest">Newest</option>
             <option value="oldest">Oldest</option>
           </select>
         </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {paginatedProducts.map(product => (
-          <Card key={product.id} className="p-4" onClick={() => handleProductClick(product)}>
-            <img src={product.image} alt={product.title} className="w-full h-48 object-cover rounded-md mb-4" />
-            <h3 className="text-lg font-semibold mb-2">{product.title}</h3>
-            <p className="text-sm text-white/70 mb-4">{product.category}</p>
-            <button
-              onClick={(e) => { e.stopPropagation(); onCreateTask(product); }}
-              className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-2 text-sm font-semibold transition-colors"
-            >
-              Create Task
-            </button>
+          <Card key={product.id} className="p-4 flex flex-col bg-gray-800 rounded-xl" onClick={() => handleProductClick(product)}>
+            <img src={product.image} alt={product.title} className="w-full h-40 object-cover rounded-lg mb-4" />
+            <div className="flex-grow flex flex-col">
+              <h3 className="text-base font-semibold mb-2 truncate">{product.title}</h3>
+              <p className="text-sm text-gray-400 mb-4">{product.category}</p>
+              <button
+                onClick={(e) => { e.stopPropagation(); onCreateTask(product); }}
+                className="w-full mt-auto rounded-lg bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-semibold transition-colors"
+              >
+                Create Task
+              </button>
+            </div>
           </Card>
         ))}
       </div>
       {totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '30px' }}>
+        <div className="flex justify-center items-center mt-6">
           <button 
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
             disabled={currentPage === 1}
-            style={{ 
-              padding: '10px 20px', 
-              borderRadius: '12px', 
-              border: '1px solid #555555', 
-              backgroundColor: '#444444', 
-              color: '#ffffff', 
-              fontSize: '16px',
-              cursor: 'pointer',
-              marginRight: '10px',
-              opacity: currentPage === 1 ? 0.5 : 1
-            }}
+            className="p-2 px-4 rounded-lg bg-gray-800 text-white text-base disabled:opacity-50"
           >
             Previous
           </button>
-          <span style={{ fontSize: '16px' }}>Page {currentPage} of {totalPages}</span>
+          <span className="text-base mx-4">Page {currentPage} of {totalPages}</span>
           <button 
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
             disabled={currentPage === totalPages}
-            style={{ 
-              padding: '10px 20px', 
-              borderRadius: '12px', 
-              border: '1px solid #555555', 
-              backgroundColor: '#444444', 
-              color: '#ffffff', 
-              fontSize: '16px',
-              cursor: 'pointer',
-              marginLeft: '10px',
-              opacity: currentPage === totalPages ? 0.5 : 1
-            }}
+            className="p-2 px-4 rounded-lg bg-gray-800 text-white text-base disabled:opacity-50"
           >
             Next
           </button>
