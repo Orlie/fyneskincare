@@ -568,7 +568,9 @@ export default function App() {
       <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-slate-900/50 backdrop-blur-lg border-t border-white/10" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
         <div className="flex items-center justify-around p-2">
           <IconBtn active={tab === "browse"} label="Affiliate" icon={<UserGroupIcon />} onClick={() => setTab("browse")} />
-          <IconBtn active={tab === "admin"} label="Admin" icon={<BuildingStorefrontIcon />} onClick={() => setTab("admin")} />
+          {userRole === "admin" && (
+            <IconBtn active={tab === "admin"} label="Admin" icon={<BuildingStorefrontIcon />} onClick={() => setTab("admin")} />
+          )}
         </div>
       </nav>
 
