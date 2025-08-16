@@ -1,9 +1,7 @@
 import './index.css';  // <-- Tailwind (must be first)
-import './App.css';    // optional extras you already had
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
-import "./App.css";
 
 function ErrorBoundary({ children }) {
   const [err, setErr] = React.useState(null);
