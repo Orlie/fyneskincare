@@ -28,7 +28,7 @@ const ProfilePhotoPicker = ({ value, onChange }) => {
   return (
     <div className="flex flex-col items-center gap-2">
       <div
-        className="w-24 h-24 rounded-full bg-white/10 border-2 border-dashed border-white/30 flex items-center justify-center cursor-pointer hover:bg-white/20"
+        className="w-24 h-24 rounded-full bg-white/10 border border-white/20 flex items-center justify-center cursor-pointer hover:bg-white/20 transition-colors"
         onClick={handlePick}
       >
         {value ? (
@@ -44,7 +44,7 @@ const ProfilePhotoPicker = ({ value, onChange }) => {
 
 
 /*************************
- * ICONS (Heroicons)
+ * ICONS (Heroicons) - Adjusted for Apple style
  *************************/
 const EyeIcon = ({ className = "w-5 h-5" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
@@ -269,28 +269,28 @@ function Toast({ toast, onDismiss }) {
   const { message, type, onUndo } = toast;
 
   const styles = {
-    info: "bg-sky-500/90 border-sky-400",
-    success: "bg-emerald-500/90 border-emerald-400",
-    error: "bg-rose-500/90 border-rose-400",
-    undo: "bg-indigo-500/90 border-indigo-400",
+    info: "bg-blue-600/80 border-blue-500",
+    success: "bg-green-600/80 border-green-500",
+    error: "bg-red-600/80 border-red-500",
+    undo: "bg-purple-600/80 border-purple-500",
   };
   const Icon = {
-    info: () => <ExclamationCircleIcon className="w-6 h-6 text-sky-100" />,
-    success: () => <CheckCircleIcon className="w-6 h-6 text-emerald-100" />,
-    error: () => <XCircleIcon className="w-6 h-6 text-rose-100" />,
-    undo: () => <ArrowPathIcon className="w-5 h-5 text-indigo-100" />,
+    info: () => <ExclamationCircleIcon className="w-6 h-6 text-blue-100" />,
+    success: () => <CheckCircleIcon className="w-6 h-6 text-green-100" />,
+    error: () => <XCircleIcon className="w-6 h-6 text-red-100" />,
+    undo: () => <ArrowPathIcon className="w-5 h-5 text-purple-100" />,
   }[type];
 
   return (
-    <div className="fixed inset-x-0 bottom-20 z-50 flex justify-center px-4 sm:bottom-6">
-      <div className={cx("flex items-center gap-4 max-w-md w-full rounded-xl border backdrop-blur-lg px-4 py-3 text-sm shadow-2xl text-white", styles[type])}>
+    <div className="fixed inset-x-0 bottom-4 z-50 flex justify-center px-4 sm:bottom-6">
+      <div className={cx("flex items-center gap-3 max-w-md w-full rounded-xl border px-4 py-3 text-sm shadow-lg text-white", styles[type], "backdrop-blur-md bg-opacity-70")}>
         <Icon />
         <span className="flex-1">{message}</span>
         {type === 'undo' && (
-          <button onClick={() => { onUndo(); onDismiss(); }} className="font-bold underline text-sm px-2 py-1">Undo</button>
+          <button onClick={() => { onUndo(); onDismiss(); }} className="font-semibold text-white/90 hover:text-white px-2 py-1 rounded-md transition-colors">Undo</button>
         )}
-        <button onClick={onDismiss}>
-          <XCircleIcon className="w-5 h-5 opacity-70 hover:opacity-100" />
+        <button onClick={onDismiss} className="p-1 rounded-full hover:bg-white/10 transition-colors">
+          <XCircleIcon className="w-5 h-5 opacity-80 hover:opacity-100" />
         </button>
       </div>
     </div>
@@ -303,7 +303,7 @@ function Card({ className, children, onClick, title }) {
       onClick={onClick}
       title={title}
       className={cx(
-        "rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-lg transition-all duration-300",
+        "rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md shadow-lg transition-all duration-300",
         onClick && "cursor-pointer hover:bg-white/10 hover:border-white/20",
         className
       )}
@@ -319,8 +319,8 @@ function Input({ id, label, type = "text", value, onChange, placeholder, error, 
 
   return (
     <div className="w-full">
-      <label htmlFor={id} className="block text-xs font-medium text-white/80 mb-1.5">
-        {label} {required && <span className="text-rose-400">*</span>}
+      <label htmlFor={id} className="block text-sm font-medium text-white/80 mb-1.5">
+        {label} {required && <span className="text-red-400">*</span>}
       </label>
       <div className="relative">
         <input
@@ -331,8 +331,8 @@ function Input({ id, label, type = "text", value, onChange, placeholder, error, 
           placeholder={placeholder}
           disabled={disabled}
           className={cx(
-            "w-full rounded-xl border bg-white/5 px-4 py-3 text-base placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-colors duration-200",
-            error ? "border-rose-400/50" : "border-white/20",
+            "w-full rounded-lg border bg-white/5 px-4 py-2.5 text-base placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200",
+            error ? "border-red-400" : "border-white/20",
             disabled && "opacity-50 cursor-not-allowed"
           )}
         />
@@ -346,7 +346,7 @@ function Input({ id, label, type = "text", value, onChange, placeholder, error, 
           </button>
         )}
       </div>
-      {error && <p className="mt-1.5 text-xs text-rose-300">{error}</p>}
+      {error && <p className="mt-1.5 text-xs text-red-300">{error}</p>}
       {hint && !error && <p className="mt-1.5 text-xs text-white/50">{hint}</p>}
     </div>
   );
@@ -364,7 +364,7 @@ function QR({ url, size = 144, onClick }) {
       onClick={onClick}
       role={onClick ? "button" : undefined}
       className={cx(
-        "rounded-xl border border-white/20 bg-white/10 p-2",
+        "rounded-lg border border-white/20 bg-white/10 p-2",
         onClick && "cursor-pointer hover:bg-white/20 transition-colors"
       )}
     />
@@ -373,12 +373,12 @@ function QR({ url, size = 144, onClick }) {
 
 function Badge({ children, tone }) {
   const m = {
-    success: "border-emerald-400/30 bg-emerald-400/15 text-emerald-100",
-    info: "border-sky-400/30 bg-sky-400/15 text-sky-100",
+    success: "border-green-400/30 bg-green-400/15 text-green-100",
+    info: "border-blue-400/30 bg-blue-400/15 text-blue-100",
     default: "border-white/20 bg-white/10 text-white/80",
   };
   return (
-    <span className={cx("rounded-full border px-2 py-0.5 text-[11px] font-medium", m[tone] || m.default)}>
+    <span className={cx("rounded-full border px-2.5 py-0.5 text-xs font-medium", m[tone] || m.default)}>
       {children}
     </span>
   );
@@ -409,9 +409,6 @@ function EmptyState({ icon, title, message, actionText, onAction }) {
 /*************************
  * ROOT APP
  *************************/
-/*************************
- * ROOT APP
- *************************/
 export default function App() {
   const [tab, setTab] = useState("browse");
   const [products, setProducts] = useState([]);
@@ -431,9 +428,6 @@ export default function App() {
         if (docSnap.exists()) {
           setUserRole(docSnap.data().role);
         } else {
-          // If user document doesn't exist (e.g., old user or admin created directly in Auth),
-          // set a default role or handle as needed.
-          // For now, we'll assume non-existent user docs are affiliates.
           setUserRole("affiliate");
         }
       } else {
@@ -446,17 +440,14 @@ export default function App() {
 
   useEffect(() => {
     const fetchInitialData = async () => {
-      // Fetch products
       const productsCollectionRef = collection(db, "products");
       const productsData = await getDocs(productsCollectionRef);
       setProducts(productsData.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
 
-      // Fetch requests
       const requestsCollectionRef = collection(db, "requests");
       const requestsData = await getDocs(requestsCollectionRef);
       setRequests(requestsData.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
 
-      // Fetch password resets
       const passwordResetsCollectionRef = collection(db, "passwordResets");
       const passwordResetsData = await getDocs(passwordResetsCollectionRef);
       setPasswordResets(passwordResetsData.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
@@ -484,12 +475,12 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen w-full text-white bg-slate-900 bg-[radial-gradient(60%_40%_at_10%_10%,rgba(99,102,241,.15),transparent),radial-gradient(60%_40%_at_90%_10%,rgba(236,72,153,.15),transparent),radial-gradient(80%_60%_at_50%_90%,rgba(34,197,94,.1),transparent)]">
+    <div className="min-h-screen w-full bg-[#1C1C1E] text-white font-sans">
       {/* Header */}
-      <header className="sticky top-0 z-20 backdrop-blur-lg bg-slate-900/60 border-b border-white/10">
+      <header className="sticky top-0 z-20 backdrop-blur-lg bg-[#1C1C1E]/70 border-b border-white/10">
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-fuchsia-500 to-sky-500 border border-white/20 flex items-center justify-center text-sm font-bold shadow-lg">
+            <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 border border-white/20 flex items-center justify-center text-sm font-semibold shadow-md">
               FS
             </div>
             <div>
@@ -501,8 +492,8 @@ export default function App() {
             <button
               onClick={() => setTab("browse")}
               className={cx(
-                "px-3 py-1.5 rounded-lg text-sm border transition-colors",
-                tab === "browse" ? "bg-white/20 border-white/30" : "bg-white/5 border-white/10 hover:bg-white/10"
+                "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                tab === "browse" ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10"
               )}
             >
               Affiliate
@@ -511,8 +502,8 @@ export default function App() {
               <button
                 onClick={() => setTab("admin")}
                 className={cx(
-                  "px-3 py-1.5 rounded-lg text-sm border transition-colors",
-                  tab === "admin" ? "bg-white/20 border-white/30" : "bg-white/5 border-white/10 hover:bg-white/10"
+                  "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                  tab === "admin" ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10"
                 )}
               >
                 Admin
@@ -549,7 +540,6 @@ export default function App() {
                   setTab={setTab}
                 />
               ) : (
-                // Loading state or unauthorized message for users without a defined role yet
                 <div>Loading user data...</div>
               )
             ) : (
@@ -560,7 +550,7 @@ export default function App() {
       </main>
 
       {/* Bottom Nav (mobile) */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-slate-900/50 backdrop-blur-lg border-t border-white/10" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#1C1C1E]/70 backdrop-blur-lg border-t border-white/10" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
         <div className="flex items-center justify-around p-2">
           <IconBtn active={tab === "browse"} label="Affiliate" icon={<UserGroupIcon />} onClick={() => setTab("browse")} />
           <IconBtn active={tab === "admin"} label="Admin" icon={<BuildingStorefrontIcon />} onClick={() => setTab("admin")} />
@@ -576,8 +566,8 @@ function IconBtn({ active, label, icon, onClick }) {
     <button
       onClick={onClick}
       className={cx(
-        "flex flex-col items-center justify-center gap-1 rounded-xl px-4 py-2 text-xs w-24 h-16 transition-colors",
-        active ? "bg-white/10 text-white" : "text-white/60 hover:bg-white/5 hover:text-white"
+        "flex flex-col items-center justify-center gap-1 rounded-lg px-4 py-2 text-xs w-24 h-16 transition-colors",
+        active ? "bg-white/20 text-white" : "text-white/60 hover:bg-white/10 hover:text-white"
       )}
     >
       {icon}
@@ -603,16 +593,16 @@ function AffiliateOnboarding({ profile, setProfile, onFinish }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
       <Card className="max-w-lg w-full p-6">
         <div className="flex justify-between items-start mb-6">
           <div>
-            <h2 className="text-xl font-bold">Welcome to the Creator Hub!</h2>
+            <h2 className="text-xl font-semibold">Welcome to the Creator Hub!</h2>
             <p className="text-white/70">Let's get you set up in a few quick steps.</p>
           </div>
           <div className="flex items-center gap-2">
             {[1, 2, 3].map(s => (
-              <div key={s} className={cx("w-2 h-2 rounded-full", s <= step ? 'bg-indigo-400' : 'bg-white/20')} />
+              <div key={s} className={cx("w-2 h-2 rounded-full", s <= step ? 'bg-blue-400' : 'bg-white/20')} />
             ))}
           </div>
         </div>
@@ -662,7 +652,7 @@ function OnboardingStep1({ profile, setProfile, onNext }) {
         <Input id="onboard-discord" label="Discord Username" value={profile.discord} onChange={e => setProfile({ ...profile, discord: e.target.value })} placeholder="your_discord#1234" error={errors.discord} required />
         <Input id="onboard-email" label="Email" type="email" value={profile.email} onChange={e => setProfile({ ...profile, email: e.target.value })} placeholder="your@email.com" error={errors.email} required />
       </div>
-      <button onClick={handleNext} className="mt-4 w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">Next</button>
+      <button onClick={handleNext} className="mt-4 w-full rounded-lg bg-blue-500 hover:bg-blue-600 px-4 py-2.5 text-sm font-semibold transition-colors">Next</button>
     </div>
   );
 }
@@ -677,7 +667,7 @@ function OnboardingStep2({ onNext }) {
         <p>3. <b className="text-white">Submit Your Content:</b> Post your video on TikTok, then submit the video link and ad code here.</p>
         <p>4. <b className="text-white">Get Paid:</b> Once approved, you'll earn commissions!</p>
       </div>
-      <button onClick={onNext} className="mt-4 w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">Next</button>
+      <button onClick={onNext} className="mt-4 w-full rounded-lg bg-blue-500 hover:bg-blue-600 px-4 py-2.5 text-sm font-semibold transition-colors">Next</button>
     </div>
   );
 }
@@ -689,7 +679,7 @@ function OnboardingStep3({ onNext }) {
       <p className="text-sm text-white/60 mt-4">
         You're ready to start browsing products and creating content. Good luck!
       </p>
-      <button onClick={onNext} className="mt-4 w-full rounded-lg border border-emerald-400/50 bg-emerald-500/80 hover:bg-emerald-500 px-4 py-3 text-sm font-semibold transition-colors">
+      <button onClick={onNext} className="mt-4 w-full rounded-lg bg-green-500 hover:bg-green-600 px-4 py-2.5 text-sm font-semibold transition-colors">
         Let's Go!
       </button>
     </div>
@@ -725,7 +715,6 @@ function OnboardingStep3({ onNext }) {
           setOnboardingCompleted(false);
         }
 
-        // Fetch tasks for the current user
         const tasksCollectionRef = collection(db, "requests");
         const q = query(tasksCollectionRef, where("affiliateUserId", "==", auth.currentUser.uid));
         const tasksData = await getDocs(q);
@@ -736,9 +725,8 @@ function OnboardingStep3({ onNext }) {
   }, [auth.currentUser]);
 
   useEffect(() => {
-    // Save profile changes to Firestore
     const saveProfile = async () => {
-      if (auth.currentUser && profile.email) { // Ensure profile is not empty and user is logged in
+      if (auth.currentUser && profile.email) {
         const userDocRef = doc(db, "users", auth.currentUser.uid);
         await updateDoc(userDocRef, profile);
       }
@@ -778,10 +766,10 @@ function OnboardingStep3({ onNext }) {
       {onboardingCompleted ? (
         <div className="grid grid-cols-1 gap-4">
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => setAffView("products")} className={cx("rounded-lg border px-3 py-2 text-sm", affView === "products" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Products</button>
-            <button onClick={() => setAffView("tasks")} className={cx("rounded-lg border px-3 py-2 text-sm", affView === "tasks" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>My Tasks</button>
-            <button onClick={() => setAffView("stats")} className={cx("rounded-lg border px-3 py-2 text-sm", affView === "stats" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Stats</button>
-            <button onClick={() => setAffView("profile")} className={cx("rounded-lg border px-3 py-2 text-sm", affView === "profile" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Profile</button>
+            <button onClick={() => setAffView("products")} className={cx("rounded-lg px-4 py-2 text-sm font-medium transition-colors", affView === "products" ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10")}>Products</button>
+            <button onClick={() => setAffView("tasks")} className={cx("rounded-lg px-4 py-2 text-sm font-medium transition-colors", affView === "tasks" ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10")}>My Tasks</button>
+            <button onClick={() => setAffView("stats")} className={cx("rounded-lg px-4 py-2 text-sm font-medium transition-colors", affView === "stats" ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10")}>Stats</button>
+            <button onClick={() => setAffView("profile")} className={cx("rounded-lg px-4 py-2 text-sm font-medium transition-colors", affView === "profile" ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10")}>Profile</button>
           </div>
 
           {affView === "products" && <ProductList products={products} onCreateTask={handleCreateTask} requests={requests} />}
@@ -841,8 +829,8 @@ function AffiliateProfilePage({ profile, setProfile, showToast, onLogout }) {
         </div>
       </div>
       <div className="mt-6 flex flex-col sm:flex-row justify-end gap-3 border-t border-white/10 pt-4">
-        <button onClick={onLogout} className="rounded-lg border border-rose-400/40 bg-rose-400/15 px-4 py-2 text-sm text-rose-200 hover:bg-rose-400/20 transition-colors">Logout</button>
-        <button onClick={handleSave} className="rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-6 py-2 text-sm font-semibold transition-colors">Save Profile</button>
+        <button onClick={onLogout} className="rounded-lg bg-red-500 hover:bg-red-600 px-4 py-2.5 text-sm font-semibold transition-colors">Logout</button>
+        <button onClick={handleSave} className="rounded-lg bg-blue-500 hover:bg-blue-600 px-6 py-2.5 text-sm font-semibold transition-colors">Save Profile</button>
       </div>
     </Card>
   );
@@ -864,26 +852,26 @@ function ProductDetailsPage({ product, onBack, onCreateTask, myTask }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <button onClick={onBack} className="rounded-lg border border-white/20 bg-white/10 hover:bg-white/20 px-4 py-2 text-sm transition-colors">← Back to products</button>
+        <button onClick={onBack} className="rounded-lg bg-white/10 hover:bg-white/20 px-4 py-2 text-sm font-medium transition-colors">← Back to products</button>
       </div>
 
       <Card className="p-4 sm:p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-4">
-            <img src={product.image} alt={product.title} className="w-full rounded-xl border border-white/10" />
-            <h2 className="text-2xl font-bold">{product.title}</h2>
+            <img src={product.image} alt={product.title} className="w-full rounded-lg border border-white/10" />
+            <h2 className="text-2xl font-semibold">{product.title}</h2>
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <Badge>{product.category}</Badge>
               <Badge>{product.commission}</Badge>
-              {inWindow ? <Badge tone="success">Available now</Badge> : <Badge tone="warn">Out of window</Badge>}
+              {inWindow ? <Badge tone="success">Available now</Badge> : <Badge tone="info">Out of window</Badge>}
             </div>
             <div className="text-sm text-white/80">
               Available: {fmtDate(product.availabilityStart)} → {fmtDate(product.availabilityEnd)}
             </div>
             <div className="flex items-center gap-4 text-sm pt-2">
-              <a href={product.productUrl} target="_blank" rel="noopener noreferrer" className="text-sky-300 hover:underline">View Product Page</a>
+              <a href={product.productUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">View Product Page</a>
               <span className="text-white/30">•</span>
-              <a href={product.contentDocUrl} target="_blank" rel="noopener noreferrer" className="text-sky-300 hover:underline">Content Strategy Doc</a>
+              <a href={product.contentDocUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Content Strategy Doc</a>
             </div>
           </div>
 
@@ -895,10 +883,10 @@ function ProductDetailsPage({ product, onBack, onCreateTask, myTask }) {
                 disabled={!inWindow || hasOpenTask || isComplete}
                 onClick={handleAction}
                 className={cx(
-                  "w-full rounded-xl border px-3 py-3 text-center text-sm font-semibold transition-colors mb-4",
+                  "w-full rounded-lg px-4 py-2.5 text-center text-sm font-semibold transition-colors",
                   (!inWindow || hasOpenTask || isComplete)
-                    ? "bg-white/5 border-white/10 text-white/40 cursor-not-allowed"
-                    : "border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500"
+                    ? "bg-white/10 text-white/40 cursor-not-allowed"
+                    : "bg-blue-500 hover:bg-blue-600"
                 )}
               >
                 {hasOpenTask ? "Task Already Open" : isComplete ? "Task Completed" : !inWindow ? "Not Available" : "Add to Showcase"}
@@ -906,7 +894,7 @@ function ProductDetailsPage({ product, onBack, onCreateTask, myTask }) {
 
               <div className="flex flex-col items-center justify-center gap-2">
                 <QR url={product.shareLink} onClick={handleAction} />
-                <button onClick={handleAction} className="text-xs text-sky-300 hover:underline">
+                <button onClick={handleAction} className="text-xs text-blue-400 hover:underline">
                   or tap here to Add to Showcase
                 </button>
               </div>
@@ -935,10 +923,10 @@ function AffiliateTasksPage({ requests, setRequests, profile, showToast, setAffV
   useEffect(() => {
     const initial = {};
     mine.forEach(task => {
-      initial[task.id] = { videoLink: task.videoLink || '', adCode: task.adCode || '' };
+      initial[task.id] = { videoLink: '', adCode: '' };
     });
     setLocalTasks(initial);
-  }, [mine]); // Depend on mine, not requests, profile, me?.id
+  }, [mine]);
 
   const handleInputChange = (id, field, value) => {
     setLocalTasks(prev => ({
@@ -964,11 +952,11 @@ function AffiliateTasksPage({ requests, setRequests, profile, showToast, setAffV
       <h2 className="text-lg font-semibold mb-4">My Tasks</h2>
       <div className="grid grid-cols-1 gap-4">
         {mine.map((r) => {
-          const localData = localTasks[r.id] || { videoLink: '', adCode: '' };
+          const localData = localTasks[r.id] || { videoLink: '', adCode: '', status: r.status };
           const isComplete = r.status === 'Complete';
           const isPendingInput = r.status === 'Pending';
           return (
-            <div key={r.id} className="rounded-xl border border-white/15 bg-white/5 p-4 space-y-3">
+            <div key={r.id} className="rounded-lg border border-white/10 bg-white/5 p-4 space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="font-semibold truncate" title={r.productTitle}>{r.productTitle}</div>
@@ -999,13 +987,13 @@ function AffiliateTasksPage({ requests, setRequests, profile, showToast, setAffV
               {isPendingInput && (
                 <button
                   onClick={() => handleSubmit(r.id)}
-                  className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-2.5 text-sm font-semibold transition-colors"
+                  className="w-full rounded-lg bg-blue-500 hover:bg-blue-600 px-4 py-2.5 text-sm font-semibold transition-colors"
                 >
                   Submit for Review
                 </button>
               )}
-              {isComplete && <p className="text-sm text-emerald-300 text-center font-medium">🎉 This task is complete. Great job!</p>}
-              {!isPendingInput && !isComplete && <p className="text-sm text-sky-300 text-center font-medium">This task is currently under review by an admin.</p>}
+              {isComplete && <p className="text-sm text-green-300 text-center font-medium">🎉 This task is complete. Great job!</p>}
+              {!isPendingInput && !isComplete && <p className="text-sm text-blue-300 text-center font-medium">This task is currently under review by an admin.</p>}
             </div>
           )
         })}
@@ -1071,7 +1059,7 @@ function AffiliateStats({ requests, profile }) {
         {totals.series.map((s) => (
           <div key={s.date} className="flex flex-col items-center gap-1 group">
             <div className="relative w-full h-full flex items-end">
-              <div title={`${s.date}: ${s.count} tasks`} className="w-full bg-indigo-400/70 rounded-t-sm hover:bg-indigo-300 transition-colors" style={{ height: `${(s.count / totals.max) * 100}%` }} />
+              <div title={`${s.date}: ${s.count} tasks`} className="w-full bg-blue-400/70 rounded-sm hover:bg-blue-300 transition-colors" style={{ height: `${(s.count / totals.max) * 100}%` }} />
             </div>
           </div>
         ))}
@@ -1099,20 +1087,20 @@ function AdminScreen({ products, setProducts, requests, setRequests, passwordRes
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <button onClick={() => setView("requests")} className={cx("rounded-lg border px-3 py-2 text-sm", view === "requests" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Tasks</button>
-        <button onClick={() => setView("products")} className={cx("rounded-lg border px-3 py-2 text-sm", view === "products" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Products</button>
-        <button onClick={() => setView("product_import")} className={cx("rounded-lg border px-3 py-2 text-sm", view === "product_import" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Import Products</button>
-        <button onClick={() => setView("users")} className={cx("rounded-lg border px-3 py-2 text-sm", view === "users" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Users</button>
-        <button onClick={() => setView("password_resets")} className={cx("rounded-lg border px-3 py-2 text-sm relative", view === "password_resets" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>
+        <button onClick={() => setView("requests")} className={cx("rounded-lg px-4 py-2 text-sm font-medium transition-colors", view === "requests" ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10")}>Tasks</button>
+        <button onClick={() => setView("products")} className={cx("rounded-lg px-4 py-2 text-sm font-medium transition-colors", view === "products" ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10")}>Products</button>
+        <button onClick={() => setView("product_import")} className={cx("rounded-lg px-4 py-2 text-sm font-medium transition-colors", view === "product_import" ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10")}>Import Products</button>
+        <button onClick={() => setView("users")} className={cx("rounded-lg px-4 py-2 text-sm font-medium transition-colors", view === "users" ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10")}>Users</button>
+        <button onClick={() => setView("password_resets")} className={cx("rounded-lg px-4 py-2 text-sm font-medium transition-colors relative", view === "password_resets" ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10")}>
           Password Resets
           {passwordResets.filter(r => r.status === 'pending').length > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center">
+            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center">
               {passwordResets.filter(r => r.status === 'pending').length}
             </span>
           )}
         </button>
         <div className="flex-1" />
-        <button onClick={onLogout} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm">Logout</button>
+        <button onClick={onLogout} className="rounded-lg bg-white/10 hover:bg-white/20 px-4 py-2 text-sm font-medium transition-colors">Logout</button>
       </div>
 
       {view === "requests" && <RequestsPanel requests={requests} setRequests={setRequests} showToast={showToast} showUndoToast={showUndoToast} />}
@@ -1126,7 +1114,7 @@ function AdminScreen({ products, setProducts, requests, setRequests, passwordRes
 
 function Stat({ label, value }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-4 text-center">
+    <div className="rounded-lg border border-white/10 bg-white/5 backdrop-blur-md p-4 text-center">
       <div className="text-3xl font-semibold">{value}</div>
       <div className="text-xs uppercase tracking-wider text-white/60">{label}</div>
     </div>
@@ -1166,7 +1154,7 @@ function UsersPanel({ showToast }) {
       <h2 className="text-lg font-semibold mb-4">Affiliate Users</h2>
       <div className="grid grid-cols-1 gap-3">
         {users.map((u) => (
-          <div key={u.id} className="rounded-xl border border-white/15 bg-white/5 p-3 flex items-center justify-between gap-3">
+          <div key={u.id} className="rounded-lg border border-white/10 bg-white/5 p-3 flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="font-medium truncate">{u.displayName || u.email}</div>
               <div className="text-xs text-white/70 truncate">{u.email} • {u.tiktok} • {u.discord}</div>
@@ -1175,8 +1163,8 @@ function UsersPanel({ showToast }) {
               <Badge tone={u.status === 'approved' ? 'success' : u.status === 'pending' ? 'info' : 'default'}>{u.status}</Badge>
               {u.status === 'pending' && (
                 <>
-                  <button onClick={() => handleApprove(u.id, u.displayName)} className="rounded-lg border border-emerald-400/40 bg-emerald-400/15 px-3 py-1 text-xs text-emerald-200 hover:bg-emerald-400/25 transition-colors">Approve</button>
-                  <button onClick={() => handleReject(u.id, u.displayName)} className="rounded-lg border border-rose-400/40 bg-rose-400/15 px-3 py-1 text-xs text-rose-200 hover:bg-rose-400/25 transition-colors">Reject</button>
+                  <button onClick={() => handleApprove(u.id, u.displayName)} className="rounded-lg bg-green-500 hover:bg-green-600 px-3 py-1.5 text-xs font-semibold transition-colors">Approve</button>
+                  <button onClick={() => handleReject(u.id, u.displayName)} className="rounded-lg bg-red-500 hover:bg-red-600 px-3 py-1.5 text-xs font-semibold transition-colors">Reject</button>
                 </>
               )}
             </div>
@@ -1205,13 +1193,13 @@ function PasswordResetPanel({ resets, setResets, showToast }) {
       ) : (
         <div className="space-y-3">
           {pendingResets.map(reset => (
-            <div key={reset.id} className="rounded-xl border border-white/15 bg-white/5 p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div key={reset.id} className="rounded-lg border border-white/10 bg-white/5 p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="font-medium">{reset.email}</p>
                 <p className="text-xs text-white/60">Requested on: {new Date(reset.createdAt).toLocaleString()}</p>
               </div>
               <div className="flex items-center gap-2 w-full sm:w-auto">
-                <button onClick={() => handleMarkCompleted(reset.id)} className="rounded-lg border border-emerald-400/50 bg-emerald-500/80 hover:bg-emerald-500 px-3 py-2 text-sm font-semibold transition-colors">
+                <button onClick={() => handleMarkCompleted(reset.id)} className="rounded-lg bg-green-500 hover:bg-green-600 px-3 py-2.5 text-sm font-semibold transition-colors">
                   Mark Completed
                 </button>
               </div>
@@ -1323,24 +1311,24 @@ function RequestsPanel({ requests, setRequests, showToast, showUndoToast }) {
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
-              className={cx("rounded-full border px-3 py-1 text-xs font-medium transition-colors", statusFilter === s ? "bg-white/20 border-white/30" : "bg-white/5 border-white/10 hover:bg-white/10")}
+              className={cx("rounded-full px-3 py-1.5 text-xs font-medium transition-colors", statusFilter === s ? "bg-white/20 text-white" : "bg-white/5 text-white/70 hover:bg-white/10")}
             >
               {s}
             </button>
           ))}
         </div>
         <div className="flex gap-2">
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search..." className="flex-grow rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm" />
-          <button onClick={exportCSV} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm">Export</button>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search..." className="flex-grow rounded-lg bg-white/10 px-3 py-2 text-sm placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <button onClick={exportCSV} className="rounded-lg bg-white/10 hover:bg-white/20 px-4 py-2 text-sm font-medium transition-colors">Export</button>
         </div>
       </div>
 
       {selected.size > 0 && (
-        <div className="mb-4 p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center gap-4">
+        <div className="mb-4 p-3 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center gap-4">
           <span className="text-sm font-medium">{selected.size} selected</span>
           <select
             onChange={e => updateStatus(selected, e.target.value)}
-            className="rounded-lg border border-white/20 bg-slate-800 px-3 py-1.5 text-sm"
+            className="rounded-lg bg-white/10 px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             defaultValue=""
           >
             <option value="" disabled>Set status to...</option>
@@ -1374,7 +1362,7 @@ function RequestsPanel({ requests, setRequests, showToast, showUndoToast }) {
                   {r.adCode && <div className="font-mono text-xs mt-1">Code: {r.adCode}</div>}
                 </td>
                 <td className="p-3">
-                  <select value={r.status} onChange={(e) => updateStatus(new Set([r.id]), e.target.value)} className="rounded-lg border border-white/20 bg-slate-800 px-2 py-1 text-xs">
+                  <select value={r.status} onChange={(e) => updateStatus(new Set([r.id]), e.target.value)} className="rounded-lg bg-white/10 px-2 py-1 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
                     {STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </td>
@@ -1433,14 +1421,13 @@ function BulkImportCard({ onImport, showToast }) {
     <Card className="p-4">
       <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4">
         <h2 className="text-lg font-semibold">Bulk Upload Products</h2>
-        <label className="flex items-center gap-2 text-xs mt-2 sm:mt-0 cursor-pointer">
-          <input type="checkbox" checked={replaceMode} onChange={(e) => setReplaceMode(e.target.checked)} className="rounded" />
+        <label className="flex items-center gap-2 text-xs mt-2 sm:mt-0 cursor-pointer text-white/70">
+          <input type="checkbox" checked={replaceMode} onChange={(e) => setReplaceMode(e.target.checked)} className="rounded-md w-4 h-4 bg-white/20 border-white/30 checked:bg-blue-500 checked:border-blue-500 focus:ring-blue-500" />
           <span>Replace all products (instead of merge)</span>
         </label>
       </div>
 
       <div className="space-y-4">
-        {/* Google Sheet Import - Made more prominent */}
         <div className="p-4 rounded-lg bg-white/5 border border-white/10">
           <h3 className="font-semibold mb-2">Option 1: Import from Google Sheet (Recommended)</h3>
           <p className="text-sm text-white/70 mb-3">Paste the URL of your public Google Sheet. The app will fetch and import the data.</p>
@@ -1454,7 +1441,7 @@ function BulkImportCard({ onImport, showToast }) {
             <button
               onClick={importFromSheet}
               disabled={busy || !sheetUrl}
-              className={cx("rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors whitespace-nowrap", (busy || !sheetUrl) && "opacity-50 cursor-not-allowed")}
+              className={cx("rounded-lg bg-blue-500 hover:bg-blue-600 px-4 py-2.5 text-sm font-semibold transition-colors whitespace-nowrap", (busy || !sheetUrl) && "opacity-50 cursor-not-allowed")}
             >
               {busy ? "Importing…" : "Fetch & Import"}
             </button>
@@ -1464,13 +1451,12 @@ function BulkImportCard({ onImport, showToast }) {
           </p>
         </div>
 
-        {/* CSV Upload */}
         <div className="p-4 rounded-lg bg-white/5 border border-white/10">
           <h3 className="font-semibold mb-2">Option 2: Upload a CSV File</h3>
           <input
             type="file"
             accept=".csv,text/csv"
-            className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20"
+            className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20 transition-colors"
             onChange={(e) => onCsvFilePicked(e.target.files?.[0])}
           />
         </div>
@@ -1494,7 +1480,6 @@ function ProductsPanel({ products, setProducts, showToast, showUndoToast }) {
   async function importRows(rows, sourceLabel, replaceMode) {
     const normalized = rows.map(normalizeProductRow);
     if (replaceMode) {
-      // Delete all existing products and then add new ones
       const productsCollectionRef = collection(db, "products");
       const existingDocs = await getDocs(productsCollectionRef);
       for (const doc of existingDocs.docs) {
@@ -1504,7 +1489,6 @@ function ProductsPanel({ products, setProducts, showToast, showUndoToast }) {
         await setDoc(doc(db, "products", row.id), row);
       }
     } else {
-      // Merge new products with existing ones
       for (const row of normalized) {
         await setDoc(doc(db, "products", row.id), row, { merge: true });
       }
@@ -1516,11 +1500,11 @@ function ProductsPanel({ products, setProducts, showToast, showUndoToast }) {
   }
 
   const handleSave = async (updatedProduct) => {
-    if (updatedProduct.id) { // Editing
+    if (updatedProduct.id) {
       const productDocRef = doc(db, "products", updatedProduct.id);
       await updateDoc(productDocRef, { ...updatedProduct, updatedAt: nowISO() });
       showToast("Product updated successfully!", "success");
-    } else { // Adding
+    } else {
       const newP = { ...updatedProduct, id: `P_${Date.now()}`, createdAt: nowISO(), updatedAt: nowISO(), deletedAt: null };
       await setDoc(doc(db, "products", newP.id), newP);
       showToast("Product added successfully!", "success");
@@ -1560,7 +1544,7 @@ function ProductsPanel({ products, setProducts, showToast, showUndoToast }) {
             <p className="text-white/70 text-sm">Add, edit, and bulk import your products here.</p>
           </div>
           <div className="flex gap-2 items-start">
-            <button onClick={() => setEditing({})} className="rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-2 text-sm font-semibold transition-colors whitespace-nowrap">Add New Product</button>
+            <button onClick={() => setEditing({})} className="rounded-lg bg-blue-500 hover:bg-blue-600 px-4 py-2.5 text-sm font-semibold transition-colors whitespace-nowrap">Add New Product</button>
           </div>
         </div>
       </Card>
@@ -1571,7 +1555,7 @@ function ProductsPanel({ products, setProducts, showToast, showUndoToast }) {
         <h3 className="font-semibold mb-2">All Products</h3>
         <div className="grid grid-cols-1 gap-3">
           {products.map(p => (
-            <div key={p.id} className="rounded-xl border border-white/15 bg-white/5 p-3 flex items-center gap-4">
+            <div key={p.id} className="rounded-lg border border-white/10 bg-white/5 p-3 flex items-center gap-4">
               <img src={p.image} alt={p.title} className="w-12 h-12 rounded-md object-cover" />
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">{p.title}</p>
@@ -1579,8 +1563,8 @@ function ProductsPanel({ products, setProducts, showToast, showUndoToast }) {
               </div>
               <div className="flex items-center gap-2">
                 <Badge tone={p.active ? 'success' : 'default'}>{p.active ? 'Active' : 'Archived'}</Badge>
-                <button onClick={() => setEditing(p)} className="text-xs hover:underline text-sky-300">Edit</button>
-                <button onClick={() => handleArchiveToggle(p.id, p.active)} className="text-xs hover:underline">{p.active ? 'Archive' : 'Restore'}</button>
+                <button onClick={() => setEditing(p)} className="text-xs text-blue-400 hover:underline">Edit</button>
+                <button onClick={() => handleArchiveToggle(p.id, p.active)} className="text-xs text-red-400 hover:underline">{p.active ? 'Archive' : 'Restore'}</button>
               </div>
             </div>
           ))}
@@ -1601,12 +1585,12 @@ function EditProductSheet({ product, onClose, onSave }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
       <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-semibold">{product.id ? "Edit Product" : "Add New Product"}</h2>
-            <button type="button" onClick={onClose} className="text-sm hover:underline">Close</button>
+            <button type="button" onClick={onClose} className="text-sm text-white/70 hover:text-white">Close</button>
           </div>
           <Input id="prod-title" label="Title" value={p.title || ''} onChange={(e) => setP({ ...p, title: e.target.value })} required />
           <Input id="prod-cat" label="Category" value={p.category || ''} onChange={(e) => setP({ ...p, category: e.target.value })} required />
@@ -1617,17 +1601,17 @@ function EditProductSheet({ product, onClose, onSave }) {
           <Input id="prod-comm" label="Commission" value={p.commission || ''} onChange={(e) => setP({ ...p, commission: e.target.value })} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-white/80 mb-1.5">Availability Start</label>
-              <input type="datetime-local" value={toDTLocal(p.availabilityStart)} onChange={(e) => setP({ ...p, availabilityStart: fromDTLocal(e.target.value) })} className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2.5 text-sm" />
+              <label className="block text-sm font-medium text-white/80 mb-1.5">Availability Start</label>
+              <input type="datetime-local" value={toDTLocal(p.availabilityStart)} onChange={(e) => setP({ ...p, availabilityStart: fromDTLocal(e.target.value) })} className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-white/80 mb-1.5">Availability End</label>
-              <input type="datetime-local" value={toDTLocal(p.availabilityEnd)} onChange={(e) => setP({ ...p, availabilityEnd: fromDTLocal(e.target.value) })} className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2.5 text-sm" />
+              <label className="block text-sm font-medium text-white/80 mb-1.5">Availability End</label>
+              <input type="datetime-local" value={toDTLocal(p.availabilityEnd)} onChange={(e) => setP({ ...p, availabilityEnd: fromDTLocal(e.target.value) })} className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
           <div className="mt-6 flex justify-end gap-3">
-            <button type="button" onClick={onClose} className="rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm">Cancel</button>
-            <button type="submit" className="rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-6 py-2 text-sm font-semibold transition-colors">Save Product</button>
+            <button type="button" onClick={onClose} className="rounded-lg bg-white/10 hover:bg-white/20 px-4 py-2.5 text-sm font-semibold transition-colors">Cancel</button>
+            <button type="submit" className="rounded-lg bg-blue-500 hover:bg-blue-600 px-6 py-2.5 text-sm font-semibold transition-colors">Save Product</button>
           </div>
         </form>
       </Card>

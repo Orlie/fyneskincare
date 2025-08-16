@@ -30,7 +30,6 @@ function ProductList({ products, onCreateTask, requests }) {
   const filteredAndSortedProducts = useMemo(() => {
     let result = products;
 
-    // Apply search term filter
     if (searchTerm) {
       result = result.filter(product =>
         product.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -38,15 +37,12 @@ function ProductList({ products, onCreateTask, requests }) {
       );
     }
 
-    // Apply category filter
     if (categoryFilter !== 'All') {
       result = result.filter(product => product.category === categoryFilter);
     }
 
-    // Apply sorting
     result.sort((a, b) => {
       if (sortBy === 'newest') {
-        // Assuming product.createdAt exists and is a comparable date string or timestamp
         return new Date(b.createdAt) - new Date(a.createdAt);
       } else if (sortBy === 'oldest') {
         return new Date(a.createdAt) - new Date(b.createdAt);
@@ -75,9 +71,9 @@ function ProductList({ products, onCreateTask, requests }) {
 
   return (
     <div className="p-4">
-      <h2 className="text-2xl font-bold text-white mb-6">Available Products</h2>
+      <h2 className="text-2xl font-semibold text-white mb-6">Available Products</h2>
 
-      <div className="bg-white/5 p-4 rounded-lg shadow-inner mb-6 flex flex-wrap gap-4 items-center">
+      <div className="bg-white/5 p-4 rounded-lg shadow-inner mb-6 flex flex-wrap gap-4 items-center border border-white/10">
         <label htmlFor="search" className="sr-only">Search Products</label>
         <input
           id="search"
@@ -85,7 +81,7 @@ function ProductList({ products, onCreateTask, requests }) {
           placeholder="Search by title or category..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="flex-grow p-2 rounded-md bg-white/10 text-white placeholder-white/70 border border-white/20 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="flex-grow p-2.5 rounded-lg bg-white/10 text-white placeholder-white/50 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
         />
 
         <label htmlFor="category" className="sr-only">Filter by Category</label>
@@ -93,7 +89,7 @@ function ProductList({ products, onCreateTask, requests }) {
           id="category"
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="p-2 rounded-md bg-white/10 text-white border border-white/20 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="p-2.5 rounded-lg bg-white/10 text-white border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
         >
           {availableCategories.map(category => (
             <option key={category} value={category}>{category}</option>
@@ -105,7 +101,7 @@ function ProductList({ products, onCreateTask, requests }) {
           id="sort"
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value)}
-          className="p-2 rounded-md bg-white/10 text-white border border-white/20 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="p-2.5 rounded-lg bg-white/10 text-white border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
         >
           <option value="newest">Sort by: Newest</option>
           <option value="oldest">Sort by: Oldest</option>
@@ -116,7 +112,7 @@ function ProductList({ products, onCreateTask, requests }) {
         {(searchTerm || categoryFilter !== 'All' || sortBy !== 'newest') && (
           <button
             onClick={clearFilters}
-            className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-700 text-white font-semibold transition-colors"
+            className="px-4 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-white font-semibold transition-colors"
           >
             Clear Filters
           </button>
@@ -129,15 +125,14 @@ function ProductList({ products, onCreateTask, requests }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {filteredAndSortedProducts.map(product => (
             <Card key={product.id} className="p-5 flex flex-col" onClick={() => handleProductClick(product)}>
-              <img src={product.image} alt={product.title} className="w-full h-48 object-cover rounded-md mb-4 flex-shrink-0" />
+              <img src={product.image} alt={product.title} className="w-full h-48 object-cover rounded-lg mb-4 flex-shrink-0 border border-white/10" />
               <h3 className="text-xl font-semibold text-white mb-2 flex-grow">{product.title}</h3>
               <p className="text-sm text-white/70 mb-2">Category: <span className="font-medium text-white">{product.category}</span></p>
-              {/* Assuming product has a price and commission property */}
               {product.price && <p className="text-sm text-white/70 mb-2">Price: <span className="font-medium text-white">${product.price.toFixed(2)}</span></p>}
               {product.commission && <p className="text-sm text-white/70 mb-4">Commission: <span className="font-medium text-white">{product.commission}%</span></p>}
               <button
                 onClick={(e) => { e.stopPropagation(); onCreateTask(product); }}
-                className="mt-auto w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-2 text-sm font-semibold transition-colors text-white"
+                className="mt-auto w-full rounded-lg bg-blue-500 hover:bg-blue-600 px-4 py-2.5 text-sm font-semibold transition-colors text-white"
               >
                 Create Task
               </button>
