@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card } from './Card';
-import ProductDetailsPage from '../../App';
+import Card from './Card'; // Corrected: default import
+import ProductDetailsPage from './ProductDetailsPage'; // Corrected: imports from its own file
 
 function ProductList({ products, onCreateTask, requests }) {
   const [selectedProduct, setSelectedProduct] = useState(null);
