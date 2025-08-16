@@ -97,9 +97,10 @@ function ProductList({ products, onCreateTask, requests }) {
               <p className="text-sm text-gray-400 mb-4">{product.category}</p>
               <button
                 onClick={(e) => { e.stopPropagation(); onCreateTask(product); }}
-                className="w-full mt-auto rounded-lg bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-semibold transition-colors"
+                className="w-full mt-auto rounded-lg bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-semibold transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed"
+                disabled={product.outOfStock}
               >
-                Create Task
+                {product.outOfStock ? "Out of Stock" : "Create Task"}
               </button>
             </div>
           </Card>

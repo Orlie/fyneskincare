@@ -188,6 +188,7 @@ function normalizeProductRow(r) {
     availabilityEnd: toISOorNow(r.availabilityEnd),
     commission: (r.commission ?? "").toString().trim(),
     active: r.active !== undefined ? toBool(r.active) : true,
+    outOfStock: r.outOfStock !== undefined ? toBool(r.outOfStock) : false,
     createdAt: nowISO(),
     updatedAt: nowISO(),
     deletedAt: null,
@@ -223,7 +224,7 @@ function sheetUrlToCsv(url) {
 /*************************
  * CONSTANTS
  *************************/
-const STATUS = ["Pending", "Video Submitted", "Ad Code Submitted", "Complete"];
+const STATUS = ["Pending", "Video Submitted", "Ad Code Submitted", "Complete", "Product Ordered"];
 
 
 const DEMO_LINK = "https://affiliate-us.tiktok.com/api/v1/share/AJ45Xdql7Qyv";
@@ -789,7 +790,7 @@ function OnboardingStep3({ onNext }) {
           </div>
 
           {affView === "products" && <ProductList products={products} onCreateTask={handleCreateTask} requests={requests} />}
-          {affView === "tasks" && <AffiliateTasksPage requests={requests} setRequests={setRequests} profile={profile} showToast={showToast} setAffView={setAffView} />}
+          {affView === "tasks" && <AffiliateTasksPage requests={requests} setRequests={setRequests} profile={profile} showToast={showToast} setAffView={setAffView} products={products} />}
           {affView === "stats" && <AffiliateStats requests={requests} profile={profile} />}
           {affView === "profile" && <AffiliateProfilePage profile={profile} setProfile={setProfile} showToast={showToast} onLogout={() => signOut(auth)} />}
         </div>
@@ -880,6 +881,7 @@ function ProductDetailsPage({ product, onBack, onCreateTask, myTask }) {
               <Badge>{product.category}</Badge>
               <Badge>{product.commission}</Badge>
               {inWindow ? <Badge tone="success">Available now</Badge> : <Badge tone="warn">Out of window</Badge>}
+              {product.outOfStock && <Badge tone="error">Out of Stock</Badge>}
             </div>
             <div className="text-sm text-white/80">
               Available: {fmtDate(product.availabilityStart)} → {fmtDate(product.availabilityEnd)}
@@ -922,7 +924,7 @@ function ProductDetailsPage({ product, onBack, onCreateTask, myTask }) {
   );
 }
 
-function AffiliateTasksPage({ requests, setRequests, profile, showToast, setAffView }) {
+function AffiliateTasksPage({ requests, setRequests, profile, showToast, setAffView, products }) {
   const mine = useMemo(() => {
     const currentUserEmail = auth.currentUser?.email;
     const currentUserId = auth.currentUser?.uid;
@@ -968,6 +970,7 @@ function AffiliateTasksPage({ requests, setRequests, profile, showToast, setAffV
       <h2 className="text-lg font-semibold mb-4">My Tasks</h2>
       <div className="grid grid-cols-1 gap-4">
         {mine.map((r) => {
+          const product = products.find(p => p.id === r.productId);
           const localData = localTasks[r.id] || { videoLink: '', adCode: '' };
           const isComplete = r.status === 'Complete';
           const isPendingInput = r.status === 'Pending';
@@ -978,8 +981,10 @@ function AffiliateTasksPage({ requests, setRequests, profile, showToast, setAffV
                   <div className="font-semibold truncate" title={r.productTitle}>{r.productTitle}</div>
                   <div className="text-xs text-white/60">Requested: {new Date(r.createdAt).toLocaleDateString()}</div>
                 </div>
-                <Badge tone={isComplete ? 'success' : 'info'}>{r.status}</Badge>
+                <Badge tone={isComplete ? 'success' : r.status === 'Product Ordered' ? 'info' : 'default'}>{r.status}</Badge>
               </div>
+
+              {product?.outOfStock && <p className="text-sm text-rose-300 text-center font-medium">This product is currently out of stock.</p>}
 
               <div className="space-y-3">
                 <Input
@@ -1009,7 +1014,8 @@ function AffiliateTasksPage({ requests, setRequests, profile, showToast, setAffV
                 </button>
               )}
               {isComplete && <p className="text-sm text-emerald-300 text-center font-medium">🎉 This task is complete. Great job!</p>}
-              {!isPendingInput && !isComplete && <p className="text-sm text-sky-300 text-center font-medium">This task is currently under review by an admin.</p>}
+              {!isPendingInput && !isComplete && r.status !== 'Product Ordered' && <p className="text-sm text-sky-300 text-center font-medium">This task is currently under review by an admin.</p>}
+              {r.status === 'Product Ordered' && <p className="text-sm text-sky-300 text-center font-medium">Your requested product has been ordered and is on its way.</p>}
             </div>
           )
         })}
@@ -1127,7 +1133,7 @@ function AdminScreen({ products, setProducts, requests, setRequests, passwordRes
         <button onClick={onLogout} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm">Logout</button>
       </div>
 
-      {view === "requests" && <RequestsPanel requests={requests} setRequests={setRequests} showToast={showToast} showUndoToast={showUndoToast} onOrder={handleOrderClick} products={products} />}
+      {view === "requests" && <RequestsPanel requests={requests} setRequests={setRequests} showToast={showToast} showUndoToast={showUndoToast} onOrder={handleOrderClick} products={products} setProducts={setProducts} />}
       {view === "products" && <ProductsPanel products={products} setProducts={setProducts} showToast={showToast} showUndoToast={showUndoToast} />}
       {view === "users" && <UsersPanel showToast={showToast} />}
       {view === "password_resets" && <PasswordResetPanel resets={passwordResets} setResets={setPasswordResets} showToast={showToast} />}
@@ -1256,7 +1262,7 @@ function PasswordResetPanel({ resets, setResets, showToast }) {
 }
 
 
-function RequestsPanel({ requests, setRequests, showToast, showUndoToast, onOrder, products }) {
+function RequestsPanel({ requests, setRequests, showToast, showUndoToast, onOrder, products, setProducts }) {
   const [statusFilter, setStatusFilter] = useState("All");
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState(new Set());
@@ -1313,6 +1319,15 @@ function RequestsPanel({ requests, setRequests, showToast, showUndoToast, onOrde
     const requestsCollectionRef = collection(db, "requests");
     const data = await getDocs(requestsCollectionRef);
     setRequests(data.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
+  };
+
+  const handleToggleOutOfStock = async (productId, outOfStock) => {
+    const productDocRef = doc(db, "products", productId);
+    await updateDoc(productDocRef, { outOfStock: !outOfStock });
+    showToast(`Product stock status updated.`, "success");
+    const productsCollectionRef = collection(db, "products");
+    const data = await getDocs(productsCollectionRef);
+    setProducts(data.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
   };
 
   const handleSelect = (id) => {
@@ -1391,6 +1406,7 @@ function RequestsPanel({ requests, setRequests, showToast, showUndoToast, onOrde
               <th className="p-3">Submissions</th>
               <th className="p-3">Status</th>
               <th className="p-3">Order</th>
+              <th className="p-3">Stock</th>
             </tr>
           </thead>
           <tbody>
@@ -1413,6 +1429,11 @@ function RequestsPanel({ requests, setRequests, showToast, showUndoToast, onOrde
                 </td>
                 <td className="p-3">
                   <button onClick={() => onOrder(r)} className="rounded-lg border border-sky-400/50 bg-sky-500/80 hover:bg-sky-500 px-3 py-1.5 text-xs font-semibold transition-colors">Order</button>
+                </td>
+                <td className="p-3">
+                  <button onClick={() => handleToggleOutOfStock(r.productId, products.find(p => p.id === r.productId)?.outOfStock)} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${products.find(p => p.id === r.productId)?.outOfStock ? 'border-red-400/50 bg-red-500/80 hover:bg-red-500' : 'border-green-400/50 bg-green-500/80 hover:bg-green-500'}`}>
+                    {products.find(p => p.id === r.productId)?.outOfStock ? "Out of Stock" : "In Stock"}
+                  </button>
                 </td>
               </tr>
             ))}}
@@ -1615,6 +1636,7 @@ function ProductsPanel({ products, setProducts, showToast, showUndoToast }) {
               </div>
               <div className="flex items-center gap-2">
                 <Badge tone={p.active ? 'success' : 'default'}>{p.active ? 'Active' : 'Archived'}</Badge>
+                {p.outOfStock && <Badge tone="error">Out of Stock</Badge>}
                 <button onClick={() => setEditing(p)} className="text-xs hover:underline text-sky-300">Edit</button>
                 <button onClick={() => handleArchiveToggle(p.id, p.active)} className="text-xs hover:underline">{p.active ? 'Archive' : 'Restore'}</button>
               </div>
@@ -1652,7 +1674,13 @@ function EditProductSheet({ product, onClose, onSave }) {
           <Input id="prod-url" label="Product Page URL" value={p.productUrl || ''} onChange={(e) => setP({ ...p, productUrl: e.target.value })} />
           <Input id="prod-order-link" label="Order Link" value={p.orderLink || ''} onChange={(e) => setP({ ...p, orderLink: e.target.value })} />
           <Input id="prod-comm" label="Commission" value={p.commission || ''} onChange={(e) => setP({ ...p, commission: e.target.value })} />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="flex items-center gap-4">
+            <label htmlFor="prod-out-of-stock" className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" id="prod-out-of-stock" checked={p.outOfStock} onChange={(e) => setP({ ...p, outOfStock: e.target.checked })} className="rounded" />
+              <span>Out of Stock</span>
+            </label>
+          </div>
+           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-white/80 mb-1.5">Availability Start</label>
               <input type="datetime-local" value={toDTLocal(p.availabilityStart)} onChange={(e) => setP({ ...p, availabilityStart: fromDTLocal(e.target.value) })} className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2.5 text-sm" />
