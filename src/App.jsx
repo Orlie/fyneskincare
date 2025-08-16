@@ -52,6 +52,12 @@ const EyeIcon = ({ className = "w-5 h-5" }) => (
   </svg>
 );
 
+const UserPlusIcon = ({ className = "w-6 h-6" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.375 12.375 0 014 19.235z" />
+  </svg>
+);
+
 const EyeSlashIcon = ({ className = "w-5 h-5" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243l-4.243-4.243" />
@@ -73,6 +79,12 @@ const ExclamationCircleIcon = ({ className = "w-6 h-6" }) => (
 const XCircleIcon = ({ className = "w-6 h-6" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const NoSymbolIcon = ({ className = "w-5 h-5" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
   </svg>
 );
 
@@ -171,6 +183,7 @@ function normalizeProductRow(r) {
     shareLink: (r.shareLink ?? DEMO_LINK).toString().trim(),
     contentDocUrl: (r.contentDocUrl ?? "").toString().trim(),
     productUrl: (r.productUrl ?? "").toString().trim(),
+    orderLink: (r.orderLink ?? "").toString().trim(),
     availabilityStart: toISOorNow(r.availabilityStart),
     availabilityEnd: toISOorNow(r.availabilityEnd),
     commission: (r.commission ?? "").toString().trim(),
@@ -1079,6 +1092,15 @@ function AffiliateStats({ requests, profile }) {
  *************************/
 function AdminScreen({ products, setProducts, requests, setRequests, passwordResets, setPasswordResets, counts, onLogout, showToast, showUndoToast }) {
   const [view, setView] = useState("requests");
+  const [selectedRequest, setSelectedRequest] = useState(null);
+
+  const handleOrderClick = (request) => {
+    setSelectedRequest(request);
+  };
+
+  const handleCloseOrderPage = () => {
+    setSelectedRequest(null);
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -1105,10 +1127,11 @@ function AdminScreen({ products, setProducts, requests, setRequests, passwordRes
         <button onClick={onLogout} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm">Logout</button>
       </div>
 
-      {view === "requests" && <RequestsPanel requests={requests} setRequests={setRequests} showToast={showToast} showUndoToast={showUndoToast} />}
+      {view === "requests" && <RequestsPanel requests={requests} setRequests={setRequests} showToast={showToast} showUndoToast={showUndoToast} onOrder={handleOrderClick} products={products} />}
       {view === "products" && <ProductsPanel products={products} setProducts={setProducts} showToast={showToast} showUndoToast={showUndoToast} />}
       {view === "users" && <UsersPanel showToast={showToast} />}
       {view === "password_resets" && <PasswordResetPanel resets={passwordResets} setResets={setPasswordResets} showToast={showToast} />}
+      {selectedRequest && <OrderPage request={selectedRequest} onClose={handleCloseOrderPage} products={products} />}
     </div>
   );
 }
@@ -1150,6 +1173,20 @@ function UsersPanel({ showToast }) {
     showToast(`${name}'s account has been rejected.`, 'info');
   };
 
+  const handleBanUser = async (id, name) => {
+    const userDocRef = doc(db, "users", id);
+    await updateDoc(userDocRef, { status: "banned" });
+    fetchUsers();
+    showToast(`${name}'s account has been banned.`, 'error');
+  };
+
+  const handleUnbanUser = async (id, name) => {
+    const userDocRef = doc(db, "users", id);
+    await updateDoc(userDocRef, { status: "approved" });
+    fetchUsers();
+    showToast(`${name}'s account has been unbanned.`, 'success');
+  };
+
   return (
     <Card className="p-4">
       <h2 className="text-lg font-semibold mb-4">Affiliate Users</h2>
@@ -1161,12 +1198,18 @@ function UsersPanel({ showToast }) {
               <div className="text-xs text-white/70 truncate">{u.email} • {u.tiktok} • {u.discord}</div>
             </div>
             <div className="flex items-center gap-2">
-              <Badge tone={u.status === 'approved' ? 'success' : u.status === 'pending' ? 'info' : 'default'}>{u.status}</Badge>
+              <Badge tone={u.status === 'approved' ? 'success' : u.status === 'pending' ? 'info' : u.status === 'banned' ? 'error' : 'default'}>{u.status}</Badge>
               {u.status === 'pending' && (
                 <>
                   <button onClick={() => handleApprove(u.id, u.displayName)} className="rounded-lg border border-emerald-400/40 bg-emerald-400/15 px-3 py-1 text-xs text-emerald-200 hover:bg-emerald-400/25 transition-colors">Approve</button>
                   <button onClick={() => handleReject(u.id, u.displayName)} className="rounded-lg border border-rose-400/40 bg-rose-400/15 px-3 py-1 text-xs text-rose-200 hover:bg-rose-400/25 transition-colors">Reject</button>
                 </>
+              )}
+              {u.status === 'approved' && (
+                <button onClick={() => handleBanUser(u.id, u.displayName)} className="rounded-lg border border-rose-400/40 bg-rose-400/15 px-3 py-1 text-xs text-rose-200 hover:bg-rose-400/25 transition-colors">Ban</button>
+              )}
+              {u.status === 'banned' && (
+                <button onClick={() => handleUnbanUser(u.id, u.displayName)} className="rounded-lg border border-emerald-400/40 bg-emerald-400/15 px-3 py-1 text-xs text-emerald-200 hover:bg-emerald-400/25 transition-colors">Unban</button>
               )}
             </div>
           </div>
@@ -1213,7 +1256,7 @@ function PasswordResetPanel({ resets, setResets, showToast }) {
 }
 
 
-function RequestsPanel({ requests, setRequests, showToast, showUndoToast }) {
+function RequestsPanel({ requests, setRequests, showToast, showUndoToast, onOrder, products }) {
   const [statusFilter, setStatusFilter] = useState("All");
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState(new Set());
@@ -1347,6 +1390,7 @@ function RequestsPanel({ requests, setRequests, showToast, showUndoToast }) {
               <th className="p-3">Product</th>
               <th className="p-3">Submissions</th>
               <th className="p-3">Status</th>
+              <th className="p-3">Order</th>
             </tr>
           </thead>
           <tbody>
@@ -1367,8 +1411,11 @@ function RequestsPanel({ requests, setRequests, showToast, showUndoToast }) {
                     {STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </td>
+                <td className="p-3">
+                  <button onClick={() => onOrder(r)} className="rounded-lg border border-sky-400/50 bg-sky-500/80 hover:bg-sky-500 px-3 py-1.5 text-xs font-semibold transition-colors">Order</button>
+                </td>
               </tr>
-            ))}
+            ))}}
           </tbody>
         </table>
         {filtered.length === 0 && <div className="text-center p-6 text-white/60">No tasks match your filters.</div>}
@@ -1603,6 +1650,7 @@ function EditProductSheet({ product, onClose, onSave }) {
           <Input id="prod-share" label="Affiliate Share Link" value={p.shareLink || ''} onChange={(e) => setP({ ...p, shareLink: e.target.value })} />
           <Input id="prod-content" label="Content Doc URL" value={p.contentDocUrl || ''} onChange={(e) => setP({ ...p, contentDocUrl: e.target.value })} />
           <Input id="prod-url" label="Product Page URL" value={p.productUrl || ''} onChange={(e) => setP({ ...p, productUrl: e.target.value })} />
+          <Input id="prod-order-link" label="Order Link" value={p.orderLink || ''} onChange={(e) => setP({ ...p, orderLink: e.target.value })} />
           <Input id="prod-comm" label="Commission" value={p.commission || ''} onChange={(e) => setP({ ...p, commission: e.target.value })} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -1619,6 +1667,29 @@ function EditProductSheet({ product, onClose, onSave }) {
             <button type="submit" className="rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-6 py-2 text-sm font-semibold transition-colors">Save Product</button>
           </div>
         </form>
+      </Card>
+    </div>
+  );
+}
+
+function OrderPage({ request, onClose, products }) {
+  const product = products.find(p => p.id === request.productId);
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 space-y-4">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-semibold">Order Product</h2>
+            <button type="button" onClick={onClose} className="text-sm hover:underline">Close</button>
+          </div>
+          <div>
+            <h3 className="text-xl font-semibold">{request.productTitle}</h3>
+            <p className="text-sm text-white/60">{request.affiliateEmail}</p>
+          </div>
+          <div className="flex justify-center">
+            <a href={product.orderLink} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-sky-400/50 bg-sky-500/80 hover:bg-sky-500 px-6 py-3 text-base font-semibold transition-colors">Order Now</a>
+          </div>
+        </div>
       </Card>
     </div>
   );
