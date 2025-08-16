@@ -2,6 +2,7 @@ import './index.css';  // <-- Tailwind (must be first)
 import './App.css';    // optional extras you already had
 import './index.css';
 import './App.css';
+import './firebaseConfig'; // Import and initialize Firebase
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";

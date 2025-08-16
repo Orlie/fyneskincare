@@ -1,258 +1,16 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import Papa from "papaparse";
-import ForgotPassword from "./components/ForgotPassword.jsx";
-
-// Firebase-backed helpers
-import {
-  onAuth,
-  getMyProfile,
-  loginAffiliate,
-  loginAdmin,
-  registerAffiliate,
-  logout,
-  approveUser,
-  rejectUser,
-  updateUser,
-  listUsersLive,
-  adminTriggerPasswordReset,
-} from "./utils/auth";
-
-import {
-  listenProducts,
-  importProductsFromPublishedCsv,
-} from "./utils/products";
-
-import {
-  listenMyTasks,
-  listenAllTasks,
-  createTask,
-  submitTask,
-  setTaskStatus,
-} from "./utils/tasks";
-
-
-const [firebaseUser, setFirebaseUser] = useState(null);  // raw Firebase user
-const [profile, setProfile] = useState(null);            // Firestore users/{uid} doc
-const [products, setProducts] = useState([]);            // products collection
-const [myTasks, setMyTasks] = useState([]);              // affiliate-only
-const [allTasks, setAllTasks] = useState([]);            // admin-only
-const [users, setUsers] = useState([]);                  // admin users table
-
-useEffect(() => {
-  const stop = onAuth(async (u) => {
-    setFirebaseUser(u || null);
-    if (u) {
-      const p = await getMyProfile();
-      setProfile(p);
-    } else {
-      setProfile(null);
-    }
-  });
-  return () => stop();
-}, []);
-
-useEffect(() => {
-  const stop = listenProducts(setProducts);
-  return () => stop();
-}, []);
-
-
-useEffect(() => {
-  if (!firebaseUser || !profile) return;
-  let stop = () => { };
-
-  if (profile.role === "admin") {
-    stop = listenAllTasks(setAllTasks);
-  } else if (profile.role === "affiliate") {
-    stop = listenMyTasks(firebaseUser.uid, setMyTasks);
-  }
-
-  return () => stop();
-}, [firebaseUser, profile]);
-
-
-// Login (affiliate)
-await loginAffiliate(email, password);
-// Login (admin)
-await loginAdmin(email, password);
-// Register (affiliate)
-await registerAffiliate({ email, password, displayName, tiktok, discord });
-// Logout
-await logout();
-
-// Create task (affiliate)
-const me = profile; // we fetched in onAuth effect
-await createTask({ uid: firebaseUser.uid, product: selectedProduct, affiliate: me });
-
-// Affiliate submits video/ad code
-await submitTask(task.id, { videoLink, adCode });
-
-// Admin updates status
-await setTaskStatus(taskId, "Complete", { sales: 3, commission: 1200 });
-
-// live list
-useEffect(() => {
-  if (profile?.role !== "admin") return;
-  const stop = listUsersLive(setUsers);
-  return () => stop();
-}, [profile]);
-
-// approve/reject
-await approveUser(uid);
-await rejectUser(uid);
-
-// password reset email (free plan)
-await adminTriggerPasswordReset(user.email);
-
-// 1) Publish the Google Sheet tab as CSV (File → Share → Publish to web → CSV)
-// 2) Put the CSV url below:
-await importProductsFromPublishedCsv("PASTE_CSV_URL_HERE", {
-  id: "id",             // change to your column names if different
-  title: "title",
-  category: "category",
-  image: "image",
-  shareLink: "shareLink",
-  commission: "commission",
-  active: "active",
-});
-alert("Imported!");
-
-
-// …
-<button
-  className="px-2 py-1 rounded bg-white/10 border border-white/20"
-  onClick={() =>
-    adminTriggerPasswordReset(user.email)
-      .then(() => alert("Reset email sent"))
-      .catch((e) => alert(e.message))
-  }
->
-  Send reset email
-</button>
 
 /*************************
  * PLACEHOLDER DEPENDENCIES
  *************************/
 
-// Placeholder for "./utils/auth.js"
+import AffiliateTasks from "./components/AffiliateTasks.jsx";
+import { getProducts, addProduct, updateProduct, deleteProduct, addTask, getTasksByUser, updateTask, listUsers, approveUser, rejectUser, getUser, updateUser } from "./utils/firestore.js";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { logout, loginAffiliate, registerAffiliate, isAffiliate, isAdmin } from "./utils/auth.js";
 // In a real app, this would be in a separate file and contain actual authentication logic.
-const USERS_KEY = "fyne_users_v2";
-const SESSION_KEY = "fyne_session_v2";
-const ADMIN_USERNAME = "admin@fyne.app";
 
-const lsget_auth = (k, f) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? f; } catch { return f; } };
-const lssave_auth = (k, v) => localStorage.setItem(k, JSON.stringify(v));
-
-// Initialize the fake DB from localStorage or seed it if it's the first time.
-const initialUsers = {
-  "admin@fyne.app": { id: "user_admin", email: "admin@fyne.app", password: "admin123", role: "admin", displayName: "Admin", status: "approved" },
-  "affiliate@fyne.app": { id: "user_affiliate_1", email: "affiliate@fyne.app", password: "password123", role: "affiliate", displayName: "Test Affiliate", tiktok: "@testaffiliate", discord: "test#1234", status: "approved" },
-  "pending@fyne.app": { id: "user_affiliate_2", email: "pending@fyne.app", password: "password123", role: "affiliate", displayName: "Pending User", tiktok: "@pending", discord: "pending#5678", status: "pending" },
-};
-
-const FAKE_DB = {
-  users: lsget_auth(USERS_KEY, initialUsers)
-};
-
-const saveUsers = () => {
-  lssave_auth(USERS_KEY, FAKE_DB.users);
-};
-
-const ensureInit = () => {
-  // On first load, ensure the initial users are saved if the DB is empty.
-  if (Object.keys(FAKE_DB.users).length === 0) {
-    FAKE_DB.users = initialUsers;
-    saveUsers();
-  }
-};
-
-const getSession = () => lsget_auth(SESSION_KEY, null);
-
-const loginAdmin = (email, password) => {
-  const user = FAKE_DB.users[email];
-  if (user && user.password === password && user.role === 'admin') {
-    const session = { userId: user.id, role: 'admin' };
-    lssave_auth(SESSION_KEY, session);
-    return session;
-  }
-  return null;
-};
-
-const loginAffiliate = (email, password) => {
-  const user = Object.values(FAKE_DB.users).find(u => u.email === email && u.role === 'affiliate');
-  if (!user || user.password !== password) {
-    return { error: "Invalid credentials." };
-  }
-  if (user.status !== 'approved') {
-    return { error: `Your account is currently ${user.status}. Please wait for admin approval.` };
-  }
-
-  const session = { userId: user.id, role: 'affiliate' };
-  lssave_auth(SESSION_KEY, session);
-  return { session };
-};
-
-
-const registerAffiliate = (details) => {
-  if (FAKE_DB.users[details.email]) return false;
-  const newUser = {
-    id: `user_${Date.now()}`,
-    ...details,
-    role: 'affiliate',
-    status: 'pending' // All new registrations are pending
-  };
-  FAKE_DB.users[details.email] = newUser;
-  saveUsers();
-  return true;
-};
-
-const logout = () => localStorage.removeItem(SESSION_KEY);
-
-const isAdmin = (session) => session?.role === 'admin';
-const isAffiliate = (session) => session?.role === 'affiliate';
-
-const currentUser = (session) => {
-  if (!session) return null;
-  return Object.values(FAKE_DB.users).find(u => u.id === session.userId) || null;
-};
-
-const listUsers = () => Object.values(FAKE_DB.users).filter(u => u.role === 'affiliate');
-
-const approveUser = (userId) => {
-  const user = Object.values(FAKE_DB.users).find(u => u.id === userId);
-  if (user) {
-    user.status = 'approved';
-    saveUsers();
-  }
-};
-
-const rejectUser = (userId) => {
-  const user = Object.values(FAKE_DB.users).find(u => u.id === userId);
-  if (user) {
-    user.status = 'rejected';
-    saveUsers();
-  }
-};
-
-const profileFromUser = (user) => {
-  if (!user) return {};
-  return {
-    email: user.email,
-    tiktok: user.tiktok,
-    discord: user.discord,
-    displayName: user.displayName,
-  };
-};
-
-const updateUserPassword = (email, newPassword) => {
-  const user = FAKE_DB.users[email];
-  if (user) {
-    user.password = newPassword;
-    saveUsers();
-    return true;
-  }
-  return false;
-};
 
 
 // Placeholder for "./components/ProfilePhotoPicker.jsx"
@@ -375,15 +133,7 @@ const fmtDate = (iso) => {
     return "—";
   }
 };
-const lsget = (k, f) => {
-  try {
-    const v = JSON.parse(localStorage.getItem(k));
-    return v ?? f;
-  } catch {
-    return f;
-  }
-};
-const lssave = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+
 const toDTLocal = (iso) => {
   if (!iso) return "";
   try {
@@ -463,101 +213,11 @@ function sheetUrlToCsv(url) {
  * CONSTANTS
  *************************/
 const STATUS = ["Pending", "Video Submitted", "Ad Code Submitted", "Complete"];
-const LSK_PRODUCTS = "fyne_m_products_v2";
-const LSK_REQUESTS = "fyne_m_requests_v2";
-const LSK_PROFILE = "fyne_m_profile_v2";
-const LSK_ONBOARDING = "fyne_m_onboarding_v1";
-const LSK_PASSWORD_RESETS = "fyne_m_password_resets_v1";
+
 
 const DEMO_LINK = "https://affiliate-us.tiktok.com/api/v1/share/AJ45Xdql7Qyv";
 
-const SEED_PRODUCTS = [
-  {
-    id: "P001",
-    category: "Serums & Essences",
-    title: "FYNE Micro-Infusion Starter Kit",
-    image: "https://images.unsplash.com/photo-1611930022073-b7a4ba5fcccd?q=80&w=1200&auto=format&fit=crop",
-    shareLink: DEMO_LINK,
-    contentDocUrl: "https://docs.google.com/document/d/1ViralContentStrategyFYNE/view",
-    productUrl: "https://snif.co/",
-    availabilityStart: nowISO(),
-    availabilityEnd: new Date(Date.now() + 14 * 864e5).toISOString(),
-    commission: "25% per sale + $100/10hrs live (eligible)",
-    active: true,
-    createdAt: nowISO(),
-    updatedAt: nowISO(),
-    deletedAt: null,
-  },
-  {
-    id: "P002",
-    category: "Cleansers",
-    title: "FYNE Gentle Renewal Cleanser",
-    image: "https://images.unsplash.com/photo-1611930021588-4f74a0b6c0c1?q=80&w=1200&auto=format&fit=crop",
-    shareLink: DEMO_LINK,
-    contentDocUrl: "https://docs.google.com/document/d/1CreatorBriefCleanserFYNE/view",
-    productUrl: "https://snif.co/",
-    availabilityStart: nowISO(),
-    availabilityEnd: new Date(Date.now() + 7 * 864e5).toISOString(),
-    commission: "20% per sale",
-    active: true,
-    createdAt: nowISO(),
-    updatedAt: nowISO(),
-    deletedAt: null,
-  },
-  {
-    id: "P003",
-    category: "Moisturizers",
-    title: "FYNE Hydro-Glass Moisturizer",
-    image: "https://images.unsplash.com/photo-1585238342020-96629d9796d1?q=80&w=1200&auto=format&fit=crop",
-    shareLink: DEMO_LINK,
-    contentDocUrl: "https://docs.google.com/document/d/1HydroGlassBriefFYNE/view",
-    productUrl: "https://snif.co/",
-    availabilityStart: nowISO(),
-    availabilityEnd: new Date(Date.now() + 30 * 864e5).toISOString(),
-    commission: "25% per sale",
-    active: true,
-    createdAt: nowISO(),
-    updatedAt: nowISO(),
-    deletedAt: null,
-  },
-];
 
-const SEED_REQUESTS = [
-  {
-    id: "TASK_DEMO_1",
-    productId: "P001",
-    productTitle: "FYNE Micro-Infusion Starter Kit",
-    shareLink: DEMO_LINK,
-    status: "Complete",
-    createdAt: new Date(Date.now() - 5 * 864e5).toISOString(),
-    updatedAt: new Date(Date.now() - 2 * 864e5).toISOString(),
-    affiliateTikTok: "@testaffiliate",
-    affiliateDiscord: "test#1234",
-    affiliateEmail: "affiliate@fyne.app",
-    affiliateUserId: "user_affiliate_1",
-    videoLink: "https://tiktok.com/...",
-    adCode: "FYNE25",
-    sales: 1250.75,
-    commission: 312.68
-  },
-  {
-    id: "TASK_DEMO_2",
-    productId: "P002",
-    productTitle: "FYNE Gentle Renewal Cleanser",
-    shareLink: DEMO_LINK,
-    status: "Complete",
-    createdAt: new Date(Date.now() - 10 * 864e5).toISOString(),
-    updatedAt: new Date(Date.now() - 8 * 864e5).toISOString(),
-    affiliateTikTok: "@testaffiliate",
-    affiliateDiscord: "test#1234",
-    affiliateEmail: "affiliate@fyne.app",
-    affiliateUserId: "user_affiliate_1",
-    videoLink: "https://tiktok.com/...",
-    adCode: "CLEAN15",
-    sales: 850.50,
-    commission: 170.10
-  }
-];
 
 /*************************
  * UI PRIMITIVES & HOOKS
@@ -746,29 +406,37 @@ export default function App() {
   const [tab, setTab] = useState("browse");
   const [products, setProducts] = useState([]);
   const [requests, setRequests] = useState([]);
-  const [passwordResets, setPasswordResets] = useState(() => lsget(LSK_PASSWORD_RESETS, []));
+  
   const [loading, setLoading] = useState(true);
   const { toast, showToast, showUndoToast, hideToast } = useToast();
 
-  const [session, setSessionState] = useState(() => getSession());
-  const me = useMemo(() => currentUser(session), [session]);
+  const [session, setSession] = useState(null);
 
   useEffect(() => {
-    ensureInit();
-    setProducts(lsget(LSK_PRODUCTS, SEED_PRODUCTS));
-    setRequests(lsget(LSK_REQUESTS, SEED_REQUESTS));
-    setLoading(false);
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setSession(user);
+      setLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    if (!loading) lssave(LSK_PRODUCTS, products);
-  }, [products, loading]);
-  useEffect(() => {
-    if (!loading) lssave(LSK_REQUESTS, requests);
-  }, [requests, loading]);
-  useEffect(() => {
-    if (!loading) lssave(LSK_PASSWORD_RESETS, passwordResets);
-  }, [passwordResets, loading]);
+    const fetchProducts = async () => {
+      const products = await getProducts();
+      setProducts(products);
+    };
+
+    const fetchRequests = async () => {
+      if (session) {
+        const requests = await getTasksByUser(session.uid);
+        setRequests(requests);
+      }
+    };
+
+    fetchProducts();
+    fetchRequests();
+  }, [session]);
 
   const counts = useMemo(() => {
     const by = Object.fromEntries(STATUS.map((s) => [s, 0]));
@@ -778,7 +446,6 @@ export default function App() {
 
   const handleLogout = () => {
     logout();
-    setSessionState(getSession());
     showToast("You have been logged out.", "info");
   };
 
@@ -831,15 +498,12 @@ export default function App() {
                   requests={requests}
                   setRequests={setRequests}
                   showToast={showToast}
-                  me={me}
                   setTab={setTab}
                 />
               ) : (
                 <AffiliateAuthPanel
-                  onAuthChange={() => setSessionState(getSession())}
+                  onAuthChange={() => setSession(getCurrentUser())}
                   showToast={showToast}
-                  passwordResets={passwordResets}
-                  setPasswordResets={setPasswordResets}
                 />
               )
             ) : isAdmin(session) ? (
@@ -848,10 +512,7 @@ export default function App() {
                 setProducts={setProducts}
                 requests={requests}
                 setRequests={setRequests}
-                passwordResets={passwordResets}
-                setPasswordResets={setPasswordResets}
                 counts={counts}
-                me={me}
                 onLogout={handleLogout}
                 showToast={showToast}
                 showUndoToast={showUndoToast}
@@ -894,17 +555,16 @@ function IconBtn({ active, label, icon, onClick }) {
 /*************************
  * AUTH UI
  *************************/
-function AdminLogin({ onSuccess, showToast }) {
+function AdminLogin({ showToast }) {
   const [username, setUsername] = useState(ADMIN_USERNAME);
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
 
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault();
-    const s = loginAdmin(username, password);
-    if (s) {
+    const user = await loginAdmin(username, password);
+    if (user) {
       showToast("Admin login successful!", "success");
-      onSuccess?.();
     } else {
       setErr("Invalid username or password.");
       showToast("Login failed. Please check your credentials.", "error");
@@ -941,7 +601,7 @@ function AdminLogin({ onSuccess, showToast }) {
 }
 
 function AffiliateAuthPanel({ onAuthChange, showToast }) {
-  const [mode, setMode] = useState("login"); // login | register | forgot
+  const [mode, setMode] = useState("login"); // login | register
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [tiktok, setTikTok] = useState("");
@@ -965,26 +625,26 @@ function AffiliateAuthPanel({ onAuthChange, showToast }) {
     return Object.keys(newErrors).length === 0;
   }
 
-  function doLogin(e) {
+  async function doLogin(e) {
     e.preventDefault();
     if (!validate(['email', 'password'])) return;
 
-    const result = loginAffiliate(email, password);
-    if (result.session) {
+    const user = await loginAffiliate({ email, password });
+    if (user) {
       showToast("Welcome back!", "success");
       onAuthChange?.();
     } else {
-      setErr({ form: result.error || "An unknown login error occurred." });
+      setErr({ form: "An unknown login error occurred." });
     }
   }
 
-  function doRegister(e) {
+  async function doRegister(e) {
     e.preventDefault();
     if (!validate(['displayName', 'email', 'password', 'tiktok', 'discord'])) return;
 
     try {
-      const ok = registerAffiliate({ email, password, displayName, tiktok, discord });
-      if (!ok) {
+      const user = await registerAffiliate({ email, password, displayName, tiktok, discord });
+      if (!user) {
         setErr({ form: "An account with this email already exists." });
         return;
       }
@@ -1010,9 +670,7 @@ function AffiliateAuthPanel({ onAuthChange, showToast }) {
           <Input id="login-email" label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" error={err.email} required />
           <Input id="login-password" label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" error={err.password} required />
           <button type="submit" className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">Sign in</button>
-          <div className="text-center">
-            <button type="button" onClick={() => setMode('forgot')} className="text-xs text-sky-300 hover:underline">Forgot Password?</button>
-          </div>
+          
         </form>
       )}
 
@@ -1028,112 +686,15 @@ function AffiliateAuthPanel({ onAuthChange, showToast }) {
         </form>
       )}
 
-      {mode === "forgot" && (
-        <ForgotPassword onBack={() => setMode("login")} />
-      )}
+      
     </Card>
   );
 }
 
-
 /*************************
  * AFFILIATE ONBOARDING
  *************************/
-function AffiliateOnboarding({ profile, setProfile, onFinish }) {
-  const [step, setStep] = useState(1);
 
-  const nextStep = () => setStep(s => s + 1);
-
-  const finishOnboarding = () => {
-    lssave(LSK_ONBOARDING, { completed: true });
-    onFinish();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <Card className="max-w-lg w-full p-6">
-        <div className="flex justify-between items-start mb-6">
-          <div>
-            <h2 className="text-xl font-bold">Welcome to the Creator Hub!</h2>
-            <p className="text-white/70">Let's get you set up in a few quick steps.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {[1, 2, 3].map(s => (
-              <div key={s} className={cx("w-2 h-2 rounded-full", s <= step ? 'bg-indigo-400' : 'bg-white/20')} />
-            ))}
-          </div>
-        </div>
-
-        {step === 1 && <OnboardingStep1 profile={profile} setProfile={setProfile} onNext={nextStep} />}
-        {step === 2 && <OnboardingStep2 onNext={nextStep} />}
-        {step === 3 && <OnboardingStep3 onNext={finishOnboarding} />}
-
-        <div className="mt-6 text-center">
-          <button onClick={finishOnboarding} className="text-xs text-white/50 hover:text-white hover:underline">
-            Done for now, take me to the app
-          </button>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-function OnboardingStep1({ profile, setProfile, onNext }) {
-  const [errors, setErrors] = useState({});
-
-  const handleNext = () => {
-    const newErrors = {};
-    if (!profile.tiktok) newErrors.tiktok = "TikTok username is required.";
-    if (!profile.discord) newErrors.discord = "Discord username is required.";
-    if (!profile.email) newErrors.email = "Email is required.";
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length === 0) {
-      onNext();
-    }
-  };
-
-  return (
-    <div>
-      <h3 className="font-semibold mb-1">Step 1: Complete Your Profile</h3>
-      <p className="text-sm text-white/60 mb-4">This helps us track your tasks and commissions.</p>
-      <div className="space-y-3">
-        <Input id="onboard-tiktok" label="TikTok Username" value={profile.tiktok} onChange={e => setProfile({ ...profile, tiktok: e.target.value })} placeholder="@yourtiktok" error={errors.tiktok} required />
-        <Input id="onboard-discord" label="Discord Username" value={profile.discord} onChange={e => setProfile({ ...profile, discord: e.target.value })} placeholder="your_discord#1234" error={errors.discord} required />
-        <Input id="onboard-email" label="Email" type="email" value={profile.email} onChange={e => setProfile({ ...profile, email: e.target.value })} placeholder="your@email.com" error={errors.email} required />
-      </div>
-      <button onClick={handleNext} className="mt-4 w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">Next</button>
-    </div>
-  );
-}
-
-function OnboardingStep2({ onNext }) {
-  return (
-    <div>
-      <h3 className="font-semibold mb-1">Step 2: How It Works</h3>
-      <div className="text-sm text-white/70 space-y-3 mt-4">
-        <p>1. <b className="text-white">Browse Products:</b> Find products you want to promote.</p>
-        <p>2. <b className="text-white">Create a Task:</b> Add a product to your showcase to get your unique affiliate link.</p>
-        <p>3. <b className="text-white">Submit Your Content:</b> Post your video on TikTok, then submit the video link and ad code here.</p>
-        <p>4. <b className="text-white">Get Paid:</b> Once approved, you'll earn commissions!</p>
-      </div>
-      <button onClick={onNext} className="mt-4 w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">Next</button>
-    </div>
-  );
-}
-
-function OnboardingStep3({ onNext }) {
-  return (
-    <div>
-      <h3 className="font-semibold mb-1">Step 3: You're All Set!</h3>
-      <p className="text-sm text-white/60 mt-4">
-        You're ready to start browsing products and creating content. Good luck!
-      </p>
-      <button onClick={onNext} className="mt-4 w-full rounded-lg border border-emerald-400/50 bg-emerald-500/80 hover:bg-emerald-500 px-4 py-3 text-sm font-semibold transition-colors">
-        Let's Go!
-      </button>
-    </div>
-  );
-}
 
 
 /*************************
@@ -1141,13 +702,11 @@ function OnboardingStep3({ onNext }) {
  *************************/
 function AffiliateScreen({ session, products, requests, setRequests, showToast, me, setTab }) {
   const [affView, setAffView] = useState("products");
-  const [profile, setProfile] = useState(() => lsget(LSK_PROFILE, { tiktok: "", discord: "", email: "", photo: "" }));
-  const [onboarding, setOnboarding] = useState(() => lsget(LSK_ONBOARDING, { completed: false }));
+  
+  
 
-  useEffect(() => lssave(LSK_PROFILE, profile), [profile]);
-  useEffect(() => {
-    if (me && isAffiliate(session)) setProfile((p) => ({ ...p, ...profileFromUser(me) }));
-  }, [me?.id, session]);
+  
+  
 
   const [q, setQ] = useState("");
   const cats = useMemo(
@@ -1158,21 +717,7 @@ function AffiliateScreen({ session, products, requests, setRequests, showToast, 
   const [sort, setSort] = useState("newest");
   const [sel, setSel] = useState(null);
 
-  const myTaskByProduct = useMemo(() => {
-    const keyMatch = (t) =>
-      (profile.email && t.affiliateEmail === profile.email) ||
-      (profile.tiktok && t.affiliateTikTok === profile.tiktok) ||
-      (me?.id && t.affiliateUserId === me.id);
-    const map = {};
-    requests.forEach((t) => {
-      if (keyMatch(t)) {
-        if (!map[t.productId] || new Date(t.createdAt) > new Date(map[t.productId].createdAt)) {
-          map[t.productId] = t;
-        }
-      }
-    });
-    return map;
-  }, [requests, profile, me?.id]);
+  
 
   const visibleProducts = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -1183,9 +728,9 @@ function AffiliateScreen({ session, products, requests, setRequests, showToast, 
       .filter((p) => !myTaskByProduct[p.id] || myTaskByProduct[p.id]?.status === 'Complete'); // Show if no task or task is complete
     arr.sort((a, b) => (sort === "newest" ? new Date(b.createdAt) - new Date(a.createdAt) : new Date(a.createdAt) - new Date(b.createdAt)));
     return arr;
-  }, [products, q, cat, myTaskByProduct, sort]);
+  }, [products, q, cat, sort]);
 
-  const handleCreateTask = (product) => {
+  const handleCreateTask = async (product) => {
     const ok = profile?.tiktok && profile?.discord && profile?.email;
     if (!ok) {
       showToast("Please complete your TikTok, Discord, and Email in your profile first.", "error");
@@ -1202,7 +747,6 @@ function AffiliateScreen({ session, products, requests, setRequests, showToast, 
       return;
     }
     const entry = {
-      id: `TASK_${Date.now()}`,
       productId: product.id,
       productTitle: product.title,
       shareLink: product.shareLink,
@@ -1212,21 +756,22 @@ function AffiliateScreen({ session, products, requests, setRequests, showToast, 
       affiliateTikTok: profile.tiktok,
       affiliateDiscord: profile.discord,
       affiliateEmail: profile.email,
-      affiliateUserId: me?.id || null,
+      affiliateUserId: me?.uid || null,
       videoLink: "",
       adCode: "",
       sales: 0,
       commission: 0,
     };
-    setRequests(prev => [entry, ...prev]);
-    showToast(`Task for "${product.title}" created!`, "success");
-    window.open(product.shareLink, "_blank", "noopener,noreferrer");
-    setSel(null); // Close details page
+    const newTaskId = await addTask(entry);
+    if (newTaskId) {
+      setRequests(prev => [{...entry, id: newTaskId}, ...prev]);
+      showToast(`Task for "${product.title}" created!`, "success");
+      window.open(product.shareLink, "_blank", "noopener,noreferrer");
+      setSel(null); // Close details page
+    }
   };
 
-  if (!onboarding.completed) {
-    return <AffiliateOnboarding profile={profile} setProfile={setProfile} onFinish={() => setOnboarding({ completed: true })} />
-  }
+  
 
   return (
     <div className="flex flex-col gap-4">
@@ -1276,19 +821,15 @@ function AffiliateScreen({ session, products, requests, setRequests, showToast, 
               product={sel}
               onBack={() => setSel(null)}
               onCreateTask={handleCreateTask}
-              myTask={myTaskByProduct[sel.id]}
             />
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {visibleProducts.map((p) => {
-                const myTask = myTaskByProduct[p.id];
                 return (
                   <Card key={p.id} className="overflow-hidden group" onClick={() => setSel(p)}>
                     <div className="aspect-[4/3] w-full overflow-hidden relative">
                       <img src={p.image} alt={p.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                       <div className="absolute top-2 right-2 flex flex-col gap-1">
-                        {myTask?.status === "Complete" && <Badge tone="success">Completed</Badge>}
-                        {myTask && myTask.status !== "Complete" && <Badge tone="info">Task Open</Badge>}
                       </div>
                     </div>
                     <div className="p-3 flex flex-col gap-2">
@@ -1313,22 +854,38 @@ function AffiliateScreen({ session, products, requests, setRequests, showToast, 
         </>
       )}
 
-      {affView === "profile" && <AffiliateProfilePage profile={profile} setProfile={setProfile} showToast={showToast} onLogout={() => { logout(); setSessionState(getSession()); }} />}
-      {affView === "tasks" && <AffiliateTasksPage requests={requests} setRequests={setRequests} profile={profile} me={me} showToast={showToast} setAffView={setAffView} />}
-      {affView === "stats" && <AffiliateStats requests={requests} profile={profile} me={me} />}
+      
+      
+      
+      {affView === "profile" && <AffiliateProfilePage showToast={showToast} onLogout={onLogout} />}
+      {affView === "tasks" && <AffiliateTasks showToast={showToast} />}
     </div>
   );
 }
 
-function AffiliateProfilePage({ profile, setProfile, showToast, onLogout }) {
-  const [localProfile, setLocalProfile] = useState(profile);
+function AffiliateProfilePage({ showToast, onLogout }) {
+  const [localProfile, setLocalProfile] = useState({ tiktok: "", discord: "", email: "", photo: "" });
   const [errors, setErrors] = useState({});
+  const auth = getAuth();
+  const user = auth.currentUser;
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (user) {
+        const userProfile = await getUser(user.uid);
+        if (userProfile) {
+          setLocalProfile(userProfile);
+        }
+      }
+    };
+    fetchProfile();
+  }, [user]);
 
   const onPhotoChange = (dataUrl) => {
     setLocalProfile(prev => ({ ...prev, photo: dataUrl }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const newErrors = {};
     if (!localProfile.tiktok) newErrors.tiktok = "TikTok username is required.";
     if (!localProfile.discord) newErrors.discord = "Discord username is required.";
@@ -1336,8 +893,10 @@ function AffiliateProfilePage({ profile, setProfile, showToast, onLogout }) {
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length === 0) {
-      setProfile(localProfile);
-      showToast("Profile updated successfully!", "success");
+      if (user) {
+        await updateUser(user.uid, localProfile);
+        showToast("Profile updated successfully!", "success");
+      }
     } else {
       showToast("Please fill out all required fields.", "error");
     }
@@ -1364,14 +923,11 @@ function AffiliateProfilePage({ profile, setProfile, showToast, onLogout }) {
   );
 }
 
-function ProductDetailsPage({ product, onBack, onCreateTask, myTask }) {
+function ProductDetailsPage({ product, onBack, onCreateTask }) {
   const inWindow = useMemo(() => {
     const n = Date.now();
     return n >= new Date(product.availabilityStart).getTime() && n <= new Date(product.availabilityEnd).getTime();
   }, [product]);
-
-  const isComplete = myTask?.status === "Complete";
-  const hasOpenTask = myTask && !isComplete;
 
   const handleAction = () => {
     onCreateTask(product);
@@ -1408,16 +964,16 @@ function ProductDetailsPage({ product, onBack, onCreateTask, myTask }) {
               <h3 className="font-semibold mb-2">Add to Your Showcase</h3>
               <p className="text-sm text-white/70 mb-4">This will create a task and open your unique affiliate link in TikTok.</p>
               <button
-                disabled={!inWindow || hasOpenTask || isComplete}
+                disabled={!inWindow}
                 onClick={handleAction}
                 className={cx(
                   "w-full rounded-xl border px-3 py-3 text-center text-sm font-semibold transition-colors mb-4",
-                  (!inWindow || hasOpenTask || isComplete)
+                  (!inWindow)
                     ? "bg-white/5 border-white/10 text-white/40 cursor-not-allowed"
                     : "border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500"
                 )}
               >
-                {hasOpenTask ? "Task Already Open" : isComplete ? "Task Completed" : !inWindow ? "Not Available" : "Add to Showcase"}
+                {"Add to Showcase"}
               </button>
 
               <div className="flex flex-col items-center justify-center gap-2">
@@ -1434,169 +990,9 @@ function ProductDetailsPage({ product, onBack, onCreateTask, myTask }) {
   );
 }
 
-function AffiliateTasksPage({ requests, setRequests, profile, me, showToast, setAffView }) {
-  const mine = useMemo(() => {
-    const isMine = (t) =>
-      (profile.email && t.affiliateEmail === profile.email) ||
-      (profile.tiktok && t.affiliateTikTok === profile.tiktok) ||
-      (me?.id && t.affiliateUserId === me.id);
-    return requests.filter(isMine).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [requests, profile, me?.id]);
 
-  const [localTasks, setLocalTasks] = useState({});
 
-  useEffect(() => {
-    const initial = {};
-    mine.forEach(task => {
-      initial[task.id] = { videoLink: task.videoLink || '', adCode: task.adCode || '' };
-    });
-    setLocalTasks(initial);
-  }, [requests, profile, me?.id]);
 
-  const handleInputChange = (id, field, value) => {
-    setLocalTasks(prev => ({
-      ...prev,
-      [id]: { ...prev[id], [field]: value }
-    }));
-  };
-
-  const handleSubmit = (id) => {
-    const taskData = localTasks[id];
-    if (!taskData.videoLink || !taskData.adCode) {
-      showToast("Please provide both the TikTok video link and the ad code.", "error");
-      return;
-    }
-    const next = requests.map((r) => (r.id === id ? { ...r, ...taskData, status: "Video Submitted", updatedAt: nowISO() } : r));
-    setRequests(next);
-    showToast("Task submitted for review!", "success");
-  };
-
-  return (
-    <Card className="p-3">
-      <h2 className="text-lg font-semibold mb-4">My Tasks</h2>
-      <div className="grid grid-cols-1 gap-4">
-        {mine.map((r) => {
-          const localData = localTasks[r.id] || { videoLink: '', adCode: '' };
-          const isComplete = r.status === 'Complete';
-          const isPendingInput = r.status === 'Pending';
-          return (
-            <div key={r.id} className="rounded-xl border border-white/15 bg-white/5 p-4 space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-semibold truncate" title={r.productTitle}>{r.productTitle}</div>
-                  <div className="text-xs text-white/60">Requested: {new Date(r.createdAt).toLocaleDateString()}</div>
-                </div>
-                <Badge tone={isComplete ? 'success' : 'info'}>{r.status}</Badge>
-              </div>
-
-              <div className="space-y-3">
-                <Input
-                  id={`video-${r.id}`}
-                  label="TikTok Video Link"
-                  value={localData.videoLink}
-                  onChange={(e) => handleInputChange(r.id, 'videoLink', e.target.value)}
-                  placeholder="https://www.tiktok.com/..."
-                  disabled={!isPendingInput}
-                />
-                <Input
-                  id={`adcode-${r.id}`}
-                  label="Ad Code"
-                  value={localData.adCode}
-                  onChange={(e) => handleInputChange(r.id, 'adCode', e.target.value)}
-                  placeholder="e.g., TIKTOKAD123"
-                  disabled={!isPendingInput}
-                />
-              </div>
-
-              {isPendingInput && (
-                <button
-                  onClick={() => handleSubmit(r.id)}
-                  className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-2.5 text-sm font-semibold transition-colors"
-                >
-                  Submit for Review
-                </button>
-              )}
-              {isComplete && <p className="text-sm text-emerald-300 text-center font-medium">🎉 This task is complete. Great job!</p>}
-              {!isPendingInput && !isComplete && <p className="text-sm text-sky-300 text-center font-medium">This task is currently under review by an admin.</p>}
-            </div>
-          )
-        })}
-        {!mine.length && (
-          <EmptyState
-            icon={<ClipboardDocumentListIcon className="w-full h-full" />}
-            title="No Tasks Yet"
-            message="You haven't created any tasks. Browse the products and add one to your showcase to get started."
-            actionText="Browse Products"
-            onAction={() => setAffView("products")}
-          />
-        )}
-      </div>
-    </Card>
-  );
-}
-
-function AffiliateStats({ requests, profile, me }) {
-  const mine = useMemo(() => {
-    const isMine = (t) =>
-      (profile.email && t.affiliateEmail === profile.email) ||
-      (profile.tiktok && t.affiliateTikTok === profile.tiktok) ||
-      (me?.id && t.affiliateUserId === me.id);
-    return requests.filter(isMine);
-  }, [requests, profile, me?.id]);
-
-  const totals = useMemo(() => {
-    const completedTasks = mine.filter(t => t.status === 'Complete');
-    const totalSales = completedTasks.reduce((sum, task) => sum + (task.sales || 0), 0);
-    const totalCommission = completedTasks.reduce((sum, task) => sum + (task.commission || 0), 0);
-
-    const perDay = {};
-    mine.forEach((t) => {
-      const d = (t.createdAt || "").slice(0, 10);
-      perDay[d] = (perDay[d] || 0) + 1;
-    });
-    const days = 14;
-    const now = new Date();
-    const series = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(now.getTime() - i * 86400000);
-      const key = d.toISOString().slice(0, 10);
-      series.push({ date: key, count: perDay[key] || 0 });
-    }
-    const max = Math.max(1, ...series.map((s) => s.count));
-    return {
-      requested: mine.length,
-      completed: completedTasks.length,
-      totalSales,
-      totalCommission,
-      series,
-      max
-    };
-  }, [mine]);
-
-  return (
-    <Card className="p-4">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <Stat label="Tasks Created" value={totals.requested} />
-        <Stat label="Tasks Completed" value={totals.completed} />
-        <Stat label="Total Sales" value={`$${totals.totalSales.toFixed(2)}`} />
-        <Stat label="Total Commission" value={`$${totals.totalCommission.toFixed(2)}`} />
-      </div>
-      <h3 className="text-sm font-semibold mb-2">My Activity (last 14 days)</h3>
-      <div className="grid grid-cols-14 gap-1.5 h-32 items-end border-b border-white/10 pb-2">
-        {totals.series.map((s) => (
-          <div key={s.date} className="flex flex-col items-center gap-1 group">
-            <div className="relative w-full h-full flex items-end">
-              <div title={`${s.date}: ${s.count} tasks`} className="w-full bg-indigo-400/70 rounded-t-sm hover:bg-indigo-300 transition-colors" style={{ height: `${(s.count / totals.max) * 100}%` }} />
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="mt-1 grid grid-cols-7 text-[10px] text-white/60">
-        {totals.series.map((s, i) => (i % 2 === 0 ? <div key={s.date} className="text-center">{s.date.slice(5)}</div> : <div key={s.date}></div>))}
-      </div>
-    </Card>
-  );
-}
 
 /*************************
  * ADMIN
@@ -1624,14 +1020,7 @@ function AdminScreen({ products, setProducts, requests, setRequests, passwordRes
         <button onClick={() => setView("requests")} className={cx("rounded-lg border px-3 py-2 text-sm", view === "requests" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Tasks</button>
         <button onClick={() => setView("products")} className={cx("rounded-lg border px-3 py-2 text-sm", view === "products" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Products</button>
         <button onClick={() => setView("users")} className={cx("rounded-lg border px-3 py-2 text-sm", view === "users" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Users</button>
-        <button onClick={() => setView("password_resets")} className={cx("rounded-lg border px-3 py-2 text-sm relative", view === "password_resets" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>
-          Password Resets
-          {passwordResets.filter(r => r.status === 'pending').length > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center">
-              {passwordResets.filter(r => r.status === 'pending').length}
-            </span>
-          )}
-        </button>
+        
         <div className="flex-1" />
         <button onClick={onLogout} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm">Logout</button>
       </div>
@@ -1639,7 +1028,7 @@ function AdminScreen({ products, setProducts, requests, setRequests, passwordRes
       {view === "requests" && <RequestsPanel requests={requests} setRequests={setRequests} showToast={showToast} showUndoToast={showUndoToast} />}
       {view === "products" && <ProductsPanel products={products} setProducts={setProducts} showToast={showToast} showUndoToast={showUndoToast} />}
       {view === "users" && <UsersPanel showToast={showToast} />}
-      {view === "password_resets" && <PasswordResetPanel resets={passwordResets} setResets={setPasswordResets} showToast={showToast} />}
+      
     </div>
   );
 }
@@ -1654,9 +1043,22 @@ function Stat({ label, value }) {
 }
 
 function UsersPanel({ showToast }) {
-  const [users, setUsers] = useState(() => listUsers());
+  const [users, setUsers] = useState([]);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const users = await listUsers();
+      setUsers(users);
+    };
+    fetchUsers();
+  }, []);
+
   function refresh() {
-    setUsers(listUsers());
+    const fetchUsers = async () => {
+      const users = await listUsers();
+      setUsers(users);
+    };
+    fetchUsers();
   }
 
   const handleApprove = (id, name) => {
@@ -1698,63 +1100,7 @@ function UsersPanel({ showToast }) {
   );
 }
 
-function PasswordResetPanel({ resets, setResets, showToast }) {
-  const [newPassword, setNewPassword] = useState({});
 
-  const handlePasswordChange = (id, pass) => {
-    setNewPassword(prev => ({ ...prev, [id]: pass }));
-  }
-
-  const handleUpdatePassword = (reset) => {
-    const pass = newPassword[reset.id];
-    if (!pass || pass.length < 6) {
-      showToast("Password must be at least 6 characters.", "error");
-      return;
-    }
-    const success = updateUserPassword(reset.email, pass);
-    if (success) {
-      setResets(prev => prev.map(r => r.id === reset.id ? { ...r, status: 'completed' } : r));
-      showToast(`Password for ${reset.email} has been updated.`, "success");
-      showToast(`New pass for ${reset.email}: ${pass}. Please send securely.`, 'info', 10000);
-    } else {
-      showToast("Could not find a user with that email.", "error");
-    }
-  };
-
-  const pendingResets = resets.filter(r => r.status === 'pending');
-
-  return (
-    <Card className="p-4">
-      <h2 className="text-lg font-semibold mb-4">Password Reset Requests</h2>
-      {pendingResets.length === 0 ? (
-        <p className="text-white/70">No pending password reset requests.</p>
-      ) : (
-        <div className="space-y-3">
-          {pendingResets.map(reset => (
-            <div key={reset.id} className="rounded-xl border border-white/15 bg-white/5 p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="font-medium">{reset.email}</p>
-                <p className="text-xs text-white/60">Requested on: {new Date(reset.createdAt).toLocaleString()}</p>
-              </div>
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <Input
-                  id={`new-pass-${reset.id}`}
-                  type="text"
-                  placeholder="Enter new password"
-                  value={newPassword[reset.id] || ''}
-                  onChange={e => handlePasswordChange(reset.id, e.target.value)}
-                />
-                <button onClick={() => handleUpdatePassword(reset)} className="rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-3 py-2 text-sm font-semibold transition-colors">
-                  Set
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </Card>
-  );
-}
 
 
 function RequestsPanel({ requests, setRequests, showToast, showUndoToast }) {
@@ -1801,6 +1147,7 @@ function RequestsPanel({ requests, setRequests, showToast, showUndoToast }) {
           updatedTask.sales = parseFloat((Math.random() * 500 + 50).toFixed(2));
           updatedTask.commission = parseFloat((updatedTask.sales * 0.25).toFixed(2));
         }
+        updateTask(r.id, updatedTask);
         return updatedTask;
       }
       return r;
@@ -2014,31 +1361,41 @@ function ProductsPanel({ products, setProducts, showToast, showUndoToast }) {
 
   function importRows(rows, sourceLabel, replaceMode) {
     const normalized = rows.map(normalizeProductRow);
-    setProducts((prev) => {
-      if (replaceMode) return normalized;
-      const map = new Map(prev.map((p) => [p.id, p]));
-      normalized.forEach((n) => {
-        const existing = map.get(n.id);
-        map.set(n.id, { ...(existing || {}), ...n, createdAt: existing?.createdAt || n.createdAt, updatedAt: nowISO() });
-      });
-      return Array.from(map.values());
+    if (replaceMode) {
+      // This is a bit more complex with Firestore, so I'm leaving it out for now.
+      // You would need to delete all existing products before adding the new ones.
+      showToast("Replace mode is not yet implemented.", "info");
+      return;
+    }
+    normalized.forEach(async (n) => {
+      const existing = products.find(p => p.id === n.id);
+      if (existing) {
+        await updateProduct(n.id, n);
+      } else {
+        await addProduct(n);
+      }
     });
     showToast(`Imported ${normalized.length} products from ${sourceLabel}${replaceMode ? " (replaced all)" : " (merged by id)"}.`, "success");
   }
 
-  const handleSave = (updatedProduct) => {
+  const handleSave = async (updatedProduct) => {
     if (updatedProduct.id) { // Editing
+      await updateProduct(updatedProduct.id, updatedProduct);
       setProducts(prev => prev.map(p => p.id === updatedProduct.id ? { ...p, ...updatedProduct, updatedAt: nowISO() } : p));
       showToast("Product updated successfully!", "success");
     } else { // Adding
       const newP = { ...updatedProduct, id: `P_${Date.now()}`, createdAt: nowISO(), updatedAt: nowISO(), deletedAt: null };
-      setProducts(prev => [newP, ...prev]);
-      showToast("Product added successfully!", "success");
+      const newId = await addProduct(newP);
+      if (newId) {
+        setProducts(prev => [{...newP, id: newId}, ...prev]);
+        showToast("Product added successfully!", "success");
+      }
     }
     setEditing(null);
   };
 
-  const handleArchiveToggle = (id, active) => {
+  const handleArchiveToggle = async (id, active) => {
+    await updateProduct(id, { active: !active, deletedAt: active ? nowISO() : null, updatedAt: nowISO() });
     setProducts(prev => prev.map(p => p.id === id ? { ...p, active: !active, deletedAt: active ? nowISO() : null, updatedAt: nowISO() } : p));
     showToast(`Product ${active ? 'archived' : 'restored'}.`, 'info');
   };
