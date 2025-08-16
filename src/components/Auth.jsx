@@ -2,6 +2,7 @@ import { useState } from "react";
 import { auth, db } from "../firebase";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
+import { loginAdmin, ADMIN_USERNAME } from "../utils/auth";
 
 export default function Auth() {
   const [email, setEmail] = useState("");
@@ -19,8 +20,18 @@ export default function Auth() {
     setError(null);
     try {
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, pw);
-        console.log("User logged in successfully!");
+        if (email === ADMIN_USERNAME) {
+          const adminSession = loginAdmin(email, pw);
+          if (adminSession) {
+            console.log("Admin logged in successfully!");
+            // You might want to redirect or update UI based on adminSession
+          } else {
+            setError("Invalid admin credentials.");
+          }
+        } else {
+          await signInWithEmailAndPassword(auth, email, pw);
+          console.log("User logged in successfully!");
+        }
       } else {
         // Sign-up logic
         if (pw !== confirmPw) {

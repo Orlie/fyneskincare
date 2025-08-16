@@ -52,7 +52,8 @@ body,
 body {
   /* Deeper, softer dark background - now handled by .bg-app */
   /* Crisp white text */
-  color: #FFFFFF;
+    color: #333333;
+  background-color: #f0f2f5;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif, "Inter"; /* Prioritize system fonts, then Inter */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

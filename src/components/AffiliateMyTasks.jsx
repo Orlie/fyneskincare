@@ -1,111 +1,114 @@
-// src/components/AffiliateMyTasks.jsx
-import React from "react";
-import { listTasksByUser, updateTask } from "../utils/auth";
+import React, { useEffect, useMemo, useState } from "react";
+import { auth, db } from "../firebase";
+import { collection, getDocs, doc, updateDoc, query, where } from "firebase/firestore";
 import Card from './Card';
 import { Input, Badge, EmptyState } from "./common";
 import { cx } from "./common/utils";
 import { ClipboardDocumentListIcon } from "./common/icons";
 
-export default function AffiliateMyTasks({ me, setAffView }) {
-    const [tasks, setTasks] = React.useState([]);
-    const [busy, setBusy] = React.useState(false);
+const nowISO = () => new Date().toISOString();
 
-    const canLoad = !!me?.id;
+export default function AffiliateMyTasks({ requests, setRequests, profile, showToast, setAffView }) {
+  const mine = useMemo(() => {
+    const currentUserEmail = auth.currentUser?.email;
+    const currentUserId = auth.currentUser?.uid;
+    return requests.filter(t => (
+      (profile.email && t.affiliateEmail === profile.email) ||
+      (profile.tiktok && t.affiliateTikTok === profile.tiktok) ||
+      (currentUserId && t.affiliateUserId === currentUserId) ||
+      (currentUserEmail && t.affiliateEmail === currentUserEmail)
+    )).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [requests, profile]);
 
-    const refresh = React.useCallback(() => {
-        if (!canLoad) return;
-        setBusy(true);
-        try {
-            const data = listTasksByUser(me.id) || [];
-            // Ensure stable shape
-            setTasks(
-                data.map((t) => ({
-                    ...t,
-                    videoLink: t.videoLink || "",
-                    adCode: t.adCode || "",
-                    status: t.status || "Pending",
-                }))
-            );
-        } finally {
-            setBusy(false);
-        }
-    }, [canLoad, me?.id]);
+  const [localTasks, setLocalTasks] = useState({});
 
-    React.useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    const initial = {};
+    mine.forEach(task => {
+      initial[task.id] = { videoLink: '', adCode: '' };
+    });
+    setLocalTasks(initial);
+  }, [mine]);
 
-    function setLocal(id, patch) {
-        setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  const handleInputChange = (id, field, value) => {
+    setLocalTasks(prev => ({
+      ...prev,
+      [id]: { ...prev[id], [field]: value }
+    }));
+  };
+
+  const handleSubmit = async (id) => {
+    const taskData = localTasks[id];
+    if (!taskData.videoLink || !taskData.adCode) {
+      showToast("Please provide both the TikTok video link and the ad code.", "error");
+      return;
     }
+    const taskDocRef = doc(db, "requests", id);
+    await updateDoc(taskDocRef, { ...taskData, status: "Video Submitted", updatedAt: nowISO() });
+    setRequests(prev => prev.map(r => (r.id === id ? { ...r, ...taskData, status: "Video Submitted", updatedAt: nowISO() } : r)));
+    showToast("Task submitted for review!", "success");
+  };
 
-    async function save(id, patch) {
-        setLocal(id, patch);
-        updateTask(id, patch); // persists to localStorage via auth.js
-    }
+  return (
+    <Card className="p-3">
+      <h2 className="text-lg font-semibold mb-4">My Tasks</h2>
+      <div className="grid grid-cols-1 gap-4">
+        {mine.map((r) => {
+          const localData = localTasks[r.id] || { videoLink: '', adCode: '', status: r.status };
+          const isComplete = r.status === 'Complete';
+          const isPendingInput = r.status === 'Pending';
+          return (
+            <div key={r.id} className="rounded-lg border border-white/10 bg-white/5 p-4 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-semibold truncate" title={r.productTitle}>{r.productTitle}</div>
+                  <div className="text-xs text-white/60">Requested: {new Date(r.createdAt).toLocaleDateString()}</div>
+                </div>
+                <Badge tone={isComplete ? 'success' : 'info'}>{r.status}</Badge>
+              </div>
 
-    if (!canLoad) {
-        return <Card>Please sign in to view your tasks.</Card>;
-    }
+              <div className="space-y-3">
+                <Input
+                  id={`video-${r.id}`}
+                  label="TikTok Video Link"
+                  value={localData.videoLink}
+                  onChange={(e) => handleInputChange(r.id, 'videoLink', e.target.value)}
+                  placeholder="https://www.tiktok.com/..."
+                  disabled={!isPendingInput}
+                />
+                <Input
+                  id={`adcode-${r.id}`}
+                  label="Ad Code"
+                  value={localData.adCode}
+                  onChange={(e) => handleInputChange(r.id, 'adCode', e.target.value)}
+                  placeholder="e.g., TIKTOKAD123"
+                  disabled={!isPendingInput}
+                />
+              </div>
 
-    if (!tasks.length) {
-        return (
-            <EmptyState
-                icon={<ClipboardDocumentListIcon className="w-full h-full" />}
-                title="No Tasks Yet"
-                message="You haven't created any tasks. Browse the products and add one to your showcase to get started."
-                actionText="Browse Products"
-                onAction={() => setAffView("products")}
-            />
-        );
-    }
-
-    return (
-        <div className="grid gap-3">
-            {tasks.map((t) => (
-                <Card key={t.id}>
-                    <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                            {t.productImage ? (
-                                <img src={t.productImage} alt="" className="h-12 w-12 rounded object-cover" />
-                            ) : (
-                                <div className="h-12 w-12 rounded bg-white/10" />
-                            )}
-                            <div className="min-w-0">
-                                <div className="text-sm font-medium truncate" title={t.productTitle}>{t.productTitle}</div>
-                                <div className="text-xs text-white/70 truncate">Created: {new Date(t.createdAt).toLocaleString()}</div>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <select
-                                value={t.status}
-                                onChange={(e) => save(t.id, { status: e.target.value })}
-                                className="rounded-lg border border-white/20 bg-white/10 text-white px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                                {STATUS.map((s) => (
-                                    <option key={s} value={s}>{s}</option>
-                                ))}
-                            </select>
-                            <button onClick={refresh} disabled={busy} className={cx("rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-xs", busy && "opacity-60")}>Refresh</button>
-                        </div>
-                    </div>
-
-                    <div className="mt-2 space-y-2">
-                        <Input
-                            label="TikTok Video Link"
-                            value={t.videoLink}
-                            onChange={(e) => setLocal(t.id, { videoLink: e.target.value })}
-                            onBlur={(e) => save(t.id, { videoLink: e.target.value, status: e.target.value ? "Video Submitted" : t.status })}
-                            placeholder="https://www.tiktok.com/..."
-                        />
-                        <Input
-                            label="Ad Code"
-                            value={t.adCode}
-                            onChange={(e) => setLocal(t.id, { adCode: e.target.value })}
-                            onBlur={(e) => save(t.id, { adCode: e.target.value, status: e.target.value ? "Ad Code Submitted" : t.status })}
-                            placeholder="e.g., TIKTOKAD123"
-                        />
-                    </div>
-                </Card>
-            ))}
-        </div>
-    );
+              {isPendingInput && (
+                <button
+                  onClick={() => handleSubmit(r.id)}
+                  className="w-full rounded-lg bg-blue-500 hover:bg-blue-600 px-4 py-2.5 text-sm font-semibold transition-colors"
+                >
+                  Submit for Review
+                </button>
+              )}
+              {isComplete && <p className="text-sm text-green-300 text-center font-medium">🎉 This task is complete. Great job!</p>}
+              {!isPendingInput && !isComplete && <p className="text-sm text-blue-300 text-center font-medium">This task is currently under review by an admin.</p>}
+            </div>
+          )
+        })}
+        {!mine.length && (
+          <EmptyState
+            icon={<ClipboardDocumentListIcon className="w-full h-full" />}
+            title="No Tasks Yet"
+            message="You haven't created any tasks. Browse the products and add one to your showcase to get started."
+            actionText="Browse Products"
+            onAction={() => setAffView("products")}
+          />
+        )}
+      </div>
+    </Card>
+  );
 }

@@ -14,6 +14,8 @@ import { UserGroupIcon, BuildingStorefrontIcon, ClipboardDocumentListIcon } from
 import ProfilePhotoPicker from "./components/ProfilePhotoPicker";
 import { cx, fmtDate } from "./components/common/utils";
 import Card from "./components/Card";
+import AffiliateMyTasks from './components/AffiliateMyTasks';
+import AffiliateStats from './components/AffiliateStats';
 
 
 
@@ -443,7 +445,7 @@ function OnboardingStep3({ onNext }) {
           </div>
 
           {affView === "products" && <ProductList products={products} onCreateTask={handleCreateTask} requests={requests} />}
-          {affView === "tasks" && <AffiliateTasksPage requests={requests} setRequests={setRequests} profile={profile} showToast={showToast} setAffView={setAffView} />}
+          {affView === "tasks" && <AffiliateMyTasks requests={requests} setRequests={setRequests} profile={profile} showToast={showToast} setAffView={setAffView} />}
           {affView === "stats" && <AffiliateStats requests={requests} profile={profile} />}
           {affView === "profile" && <AffiliateProfilePage profile={profile} setProfile={setProfile} showToast={showToast} onLogout={() => signOut(auth)} />}
         </div>
@@ -576,170 +578,7 @@ function ProductDetailsPage({ product, onBack, onCreateTask, myTask }) {
   );
 }
 
-function AffiliateTasksPage({ requests, setRequests, profile, showToast, setAffView }) {
-  const mine = useMemo(() => {
-    const currentUserEmail = auth.currentUser?.email;
-    const currentUserId = auth.currentUser?.uid;
-    return requests.filter(t => (
-      (profile.email && t.affiliateEmail === profile.email) ||
-      (profile.tiktok && t.affiliateTikTok === profile.tiktok) ||
-      (currentUserId && t.affiliateUserId === currentUserId) ||
-      (currentUserEmail && t.affiliateEmail === currentUserEmail)
-    )).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [requests, profile]);
 
-  const [localTasks, setLocalTasks] = useState({});
-
-  useEffect(() => {
-    const initial = {};
-    mine.forEach(task => {
-      initial[task.id] = { videoLink: '', adCode: '' };
-    });
-    setLocalTasks(initial);
-  }, [mine]);
-
-  const handleInputChange = (id, field, value) => {
-    setLocalTasks(prev => ({
-      ...prev,
-      [id]: { ...prev[id], [field]: value }
-    }));
-  };
-
-  const handleSubmit = async (id) => {
-    const taskData = localTasks[id];
-    if (!taskData.videoLink || !taskData.adCode) {
-      showToast("Please provide both the TikTok video link and the ad code.", "error");
-      return;
-    }
-    const taskDocRef = doc(db, "requests", id);
-    await updateDoc(taskDocRef, { ...taskData, status: "Video Submitted", updatedAt: nowISO() });
-    setRequests(prev => prev.map(r => (r.id === id ? { ...r, ...taskData, status: "Video Submitted", updatedAt: nowISO() } : r)));
-    showToast("Task submitted for review!", "success");
-  };
-
-  return (
-    <Card className="p-3">
-      <h2 className="text-lg font-semibold mb-4">My Tasks</h2>
-      <div className="grid grid-cols-1 gap-4">
-        {mine.map((r) => {
-          const localData = localTasks[r.id] || { videoLink: '', adCode: '', status: r.status };
-          const isComplete = r.status === 'Complete';
-          const isPendingInput = r.status === 'Pending';
-          return (
-            <div key={r.id} className="rounded-lg border border-white/10 bg-white/5 p-4 space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-semibold truncate" title={r.productTitle}>{r.productTitle}</div>
-                  <div className="text-xs text-white/60">Requested: {new Date(r.createdAt).toLocaleDateString()}</div>
-                </div>
-                <Badge tone={isComplete ? 'success' : 'info'}>{r.status}</Badge>
-              </div>
-
-              <div className="space-y-3">
-                <Input
-                  id={`video-${r.id}`}
-                  label="TikTok Video Link"
-                  value={localData.videoLink}
-                  onChange={(e) => handleInputChange(r.id, 'videoLink', e.target.value)}
-                  placeholder="https://www.tiktok.com/..."
-                  disabled={!isPendingInput}
-                />
-                <Input
-                  id={`adcode-${r.id}`}
-                  label="Ad Code"
-                  value={localData.adCode}
-                  onChange={(e) => handleInputChange(r.id, 'adCode', e.target.value)}
-                  placeholder="e.g., TIKTOKAD123"
-                  disabled={!isPendingInput}
-                />
-              </div>
-
-              {isPendingInput && (
-                <button
-                  onClick={() => handleSubmit(r.id)}
-                  className="w-full rounded-lg bg-blue-500 hover:bg-blue-600 px-4 py-2.5 text-sm font-semibold transition-colors"
-                >
-                  Submit for Review
-                </button>
-              )}
-              {isComplete && <p className="text-sm text-green-300 text-center font-medium">🎉 This task is complete. Great job!</p>}
-              {!isPendingInput && !isComplete && <p className="text-sm text-blue-300 text-center font-medium">This task is currently under review by an admin.</p>}
-            </div>
-          )
-        })}
-        {!mine.length && (
-          <EmptyState
-            icon={<ClipboardDocumentListIcon className="w-full h-full" />}
-            title="No Tasks Yet"
-            message="You haven't created any tasks. Browse the products and add one to your showcase to get started."
-            actionText="Browse Products"
-            onAction={() => setAffView("products")}
-          />
-        )}
-      </div>
-    </Card>
-  );
-}
-
-function AffiliateStats({ requests, profile }) {
-  const mine = useMemo(() => {
-    const currentUserEmail = auth.currentUser?.email;
-    const currentUserId = auth.currentUser?.uid;
-    return requests.filter(t => (
-      (profile.email && t.affiliateEmail === profile.email) ||
-      (profile.tiktok && t.affiliateTikTok === profile.tiktok) ||
-      (currentUserId && t.affiliateUserId === currentUserId) ||
-      (currentUserEmail && t.affiliateEmail === currentUserEmail)
-    ));
-  }, [requests, profile]);
-
-  const totals = useMemo(() => {
-    const completedTasks = mine.filter(t => t.status === 'Complete');
-
-    const perDay = {};
-    mine.forEach((t) => {
-      const d = (t.createdAt || "").slice(0, 10);
-      perDay[d] = (perDay[d] || 0) + 1;
-    });
-    const days = 14;
-    const now = new Date();
-    const series = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(now.getTime() - i * 86400000);
-      const key = d.toISOString().slice(0, 10);
-      series.push({ date: key, count: perDay[key] || 0 });
-    }
-    const max = Math.max(1, ...series.map((s) => s.count));
-    return {
-      requested: mine.length,
-      completed: completedTasks.length,
-      series,
-      max
-    };
-  }, [mine]);
-
-  return (
-    <Card className="p-4">
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <Stat label="Tasks Created" value={totals.requested} />
-        <Stat label="Tasks Completed" value={totals.completed} />
-      </div>
-      <h3 className="text-sm font-semibold mb-2">My Activity (last 14 days)</h3>
-      <div className="grid grid-cols-14 gap-1.5 h-32 items-end border-b border-white/10 pb-2">
-        {totals.series.map((s) => (
-          <div key={s.date} className="flex flex-col items-center gap-1 group">
-            <div className="relative w-full h-full flex items-end">
-              <div title={`${s.date}: ${s.count} tasks`} className="w-full bg-gradient-to-t from-blue-500 to-blue-300 rounded-md hover:from-blue-400 hover:to-blue-200 transition-colors" style={{ height: `${(s.count / totals.max) * 100}%` }} />
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="mt-1 grid grid-cols-7 text-[10px] text-white/60">
-        {totals.series.map((s, i) => (i % 2 === 0 ? <div key={s.date} className="text-center">{fmtDate(s.date)}</div> : <div key={s.date}></div>))}
-      </div>
-    </Card>
-  );
-}
 
 /*************************
  * ADMIN
