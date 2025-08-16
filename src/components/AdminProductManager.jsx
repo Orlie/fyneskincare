@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Card from './Card'; // Assuming Card is styled consistently
+import { Input } from './common';
 
 function AdminProductManager({ setProducts, showToast }) {
   const [googleSheetUrl, setGoogleSheetUrl] = useState('');
@@ -138,18 +139,19 @@ function AdminProductManager({ setProducts, showToast }) {
     <Card className="p-4">
       <h2 className="text-2xl font-semibold text-white mb-6">Admin Product Manager</h2>
 
-      <div className="bg-white/5 p-4 rounded-lg shadow-inner mb-6 border border-white/10">
+      <Card className="p-4 mb-6">
         <p className="text-white/70 mb-4">
           Enter the Google Sheet URL containing product data. In a real application, this URL would be sent to a backend
           for secure fetching, parsing, and storage of products into your database.
         </p>
         <div className="flex flex-col sm:flex-row gap-4">
-          <input
+          <Input
+            id="google-sheet-url"
+            label="Google Sheet URL"
             type="text"
             placeholder="Google Sheet URL (e.g., https://docs.google.com/spreadsheets/d/...)"
             value={googleSheetUrl}
             onChange={(e) => setGoogleSheetUrl(e.target.value)}
-            className="flex-grow p-2.5 rounded-lg bg-white/10 text-white placeholder-white/50 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
           />
           <button
             onClick={handleImport}
@@ -160,10 +162,10 @@ function AdminProductManager({ setProducts, showToast }) {
           </button>
         </div>
         {message && <p className="mt-4 text-white/80">{message}</p>}
-      </div>
+      </Card>
 
       {importedData && importedData.length > 0 && (
-        <div className="bg-white/5 p-4 rounded-lg shadow-inner border border-white/10">
+        <Card className="p-4">
           <h3 className="text-xl font-semibold text-white mb-4">Simulated Imported Products:</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {importedData.map(product => (
@@ -175,7 +177,7 @@ function AdminProductManager({ setProducts, showToast }) {
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
     </Card>
   );

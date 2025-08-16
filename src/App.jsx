@@ -8,130 +8,22 @@ import Auth from "./components/Auth";
 import ProductList from "./components/ProductList";
 import AdminProductManager from "./components/AdminProductManager";
 
-/*************************
- * PLACEHOLDER DEPENDENCIES
- *************************/
-
-// Placeholder for "./components/ProfilePhotoPicker.jsx"
-const ProfilePhotoPicker = ({ value, onChange }) => {
-  const fileInputRef = useRef(null);
-  const handlePick = () => fileInputRef.current?.click();
-  const onFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (readEvent) => {
-      onChange(readEvent.target?.result);
-    };
-    reader.readAsDataURL(file);
-  };
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <div
-        className="w-24 h-24 rounded-full bg-white/10 border border-white/20 flex items-center justify-center cursor-pointer hover:bg-white/20 transition-colors"
-        onClick={handlePick}
-      >
-        {value ? (
-          <img src={value} alt="Profile" className="w-full h-full rounded-full object-cover" />
-        ) : (
-          <span className="text-xs text-white/50 text-center">Tap to add photo</span>
-        )}
-      </div>
-      <input type="file" accept="image/*" ref={fileInputRef} onChange={onFileChange} className="hidden" />
-    </div>
-  );
-};
+import { useToast, Toast } from "./components/common/toast";
+import { Input, Badge, SkeletonLoader, EmptyState, QR, Stat, SearchHighlight } from "./components/common";
+import { UserGroupIcon, BuildingStorefrontIcon, ClipboardDocumentListIcon } from "./components/common/icons";
+import ProfilePhotoPicker from "./components/ProfilePhotoPicker";
+import { cx, fmtDate } from "./components/common/utils";
+import Card from "./components/Card";
 
 
-/*************************
- * ICONS (Heroicons) - Adjusted for Apple style
- *************************/
-const EyeIcon = ({ className = "w-5 h-5" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639l4.418-5.58a1.012 1.012 0 011.275-.247l.885.442A1.012 1.012 0 008.973 7.03l.002.002a1.012 1.012 0 01.247 1.275l-5.58 4.418a1.012 1.012 0 01-.639 0z" />
-    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6.75 6.75 0 006.75-6.75a6.75 6.75 0 00-6.75-6.75a6.75 6.75 0 00-6.75 6.75a6.75 6.75 0 006.75 6.75z" />
-  </svg>
-);
-
-const EyeSlashIcon = ({ className = "w-5 h-5" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243l-4.243-4.243" />
-  </svg>
-);
-
-const CheckCircleIcon = ({ className = "w-6 h-6" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
-
-const ExclamationCircleIcon = ({ className = "w-6 h-6" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-  </svg>
-);
-
-const XCircleIcon = ({ className = "w-6 h-6" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
-
-const UserGroupIcon = ({ className = "w-6 h-6" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m-7.5-2.962a3.75 3.75 0 100-7.5 3.75 3.75 0 000 7.5zM3.75 18.75a3 3 0 013-3h1.5a3 3 0 013 3v2.25a3 3 0 01-3 3h-1.5a3 3 0 01-3-3v-2.25z" />
-  </svg>
-);
-
-const BuildingStorefrontIcon = ({ className = "w-6 h-6" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349a.75.75 0 01.121-.427l2.083-3.646a.75.75 0 00-.65-1.125H6.528a.75.75 0 00-.65 1.125l2.083 3.646a.75.75 0 01.121.427V21m0 0h3.64" />
-  </svg>
-);
-
-const ClipboardDocumentListIcon = ({ className = "w-6 h-6" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75c0-.231-.035-.454-.1-.664M6.75 7.5h1.5a.75.75 0 000-1.5h-1.5a.75.75 0 000 1.5zM4.5 9.75a.75.75 0 01.75-.75h13.5a.75.75 0 010 1.5H5.25a.75.75 0 01-.75-.75z" />
-  </svg>
-);
-
-const UserCircleIcon = ({ className = "w-6 h-6" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
-  </svg>
-);
-
-const ChartBarIcon = ({ className = "w-6 h-6" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-  </svg>
-);
-
-const ArrowPathIcon = ({ className = "w-5 h-5" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0011.664 0l3.181-3.183m-3.181-4.992l-3.182-3.182a8.25 8.25 0 00-11.664 0l-3.182 3.182" />
-  </svg>
-);
-
-const DocumentArrowDownIcon = ({ className = "w-5 h-5" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-  </svg>
-);
 
 
-/*************************
- * SMALL HELPERS
- *************************/
-const cx = (...c) => c.filter(Boolean).join(" ");
+
+
+
+
 const nowISO = () => new Date().toISOString();
-const fmtDate = (iso) => {
-  try {
-    return new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit" }).format(new Date(iso));
-  } catch {
-    return "—";
-  }
-};
+
 
 const toDTLocal = (iso) => {
   if (!iso) return "";
@@ -226,185 +118,11 @@ const DEMO_LINK = "https://affiliate-us.tiktok.com/api/v1/share/AJ45Xdql7Qyv";
 
 
 
-/*************************
- * UI PRIMITIVES & HOOKS
- *************************/
-function useToast() {
-  const [toast, setToast] = useState(null);
-  const toastTimeoutRef = useRef();
 
-  const showToast = (message, type = 'info', duration = 3000) => {
-    if (toastTimeoutRef.current) {
-      clearTimeout(toastTimeoutRef.current);
-    }
-    setToast({ message, type });
-    toastTimeoutRef.current = setTimeout(() => {
-      setToast(null);
-      toastTimeoutRef.current = null;
-    }, duration);
-  };
 
-  const showUndoToast = (message, onUndo, duration = 5000) => {
-    if (toastTimeoutRef.current) {
-      clearTimeout(toastTimeoutRef.current);
-    }
-    setToast({ message, type: 'undo', onUndo });
-    toastTimeoutRef.current = setTimeout(() => {
-      setToast(null);
-      toastTimeoutRef.current = null;
-    }, duration);
-  };
 
-  const hideToast = () => {
-    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    setToast(null);
-  }
 
-  return { toast, showToast, showUndoToast, hideToast };
-}
 
-function Toast({ toast, onDismiss }) {
-  if (!toast) return null;
-
-  const { message, type, onUndo } = toast;
-
-  const styles = {
-    info: "bg-blue-600/80 border-blue-500",
-    success: "bg-green-600/80 border-green-500",
-    error: "bg-red-600/80 border-red-500",
-    undo: "bg-purple-600/80 border-purple-500",
-  };
-  const Icon = {
-    info: () => <ExclamationCircleIcon className="w-6 h-6 text-blue-100" />,
-    success: () => <CheckCircleIcon className="w-6 h-6 text-green-100" />,
-    error: () => <XCircleIcon className="w-6 h-6 text-red-100" />,
-    undo: () => <ArrowPathIcon className="w-5 h-5 text-purple-100" />,
-  }[type];
-
-  return (
-    <div className="fixed inset-x-0 bottom-4 z-50 flex justify-center px-4 sm:bottom-6">
-      <div className={cx("flex items-center gap-3 max-w-md w-full rounded-xl border px-4 py-3 text-sm shadow-lg text-white", styles[type], "backdrop-blur-md bg-opacity-70")}>
-        <Icon />
-        <span className="flex-1">{message}</span>
-        {type === 'undo' && (
-          <button onClick={() => { onUndo(); onDismiss(); }} className="font-semibold text-white/90 hover:text-white px-2 py-1 rounded-md transition-colors">Undo</button>
-        )}
-        <button onClick={onDismiss} className="p-1 rounded-full hover:bg-white/10 transition-colors">
-          <XCircleIcon className="w-5 h-5 opacity-80 hover:opacity-100" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function Card({ className, children, onClick, title }) {
-  return (
-    <div
-      onClick={onClick}
-      title={title}
-      className={cx(
-        "rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md shadow-lg transition-all duration-300",
-        onClick && "cursor-pointer hover:bg-white/10 hover:border-white/20",
-        className
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-function Input({ id, label, type = "text", value, onChange, placeholder, error, hint, required, disabled = false }) {
-  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  const inputType = type === "password" && isPasswordVisible ? "text" : type;
-
-  return (
-    <div className="w-full">
-      <label htmlFor={id} className="block text-sm font-medium text-white/80 mb-1.5">
-        {label} {required && <span className="text-red-400">*</span>}
-      </label>
-      <div className="relative">
-        <input
-          id={id}
-          type={inputType}
-          value={value}
-          onChange={onChange}
-          placeholder={placeholder}
-          disabled={disabled}
-          className={cx(
-            "w-full rounded-lg border bg-white/5 px-4 py-2.5 text-base placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200",
-            error ? "border-red-400" : "border-white/20",
-            disabled && "opacity-50 cursor-not-allowed"
-          )}
-        />
-        {type === "password" && (
-          <button
-            type="button"
-            onClick={() => setIsPasswordVisible(!isPasswordVisible)}
-            className="absolute inset-y-0 right-0 flex items-center pr-4 text-white/60 hover:text-white"
-          >
-            {isPasswordVisible ? <EyeSlashIcon /> : <EyeIcon />}
-          </button>
-        )}
-      </div>
-      {error && <p className="mt-1.5 text-xs text-red-300">{error}</p>}
-      {hint && !error && <p className="mt-1.5 text-xs text-white/50">{hint}</p>}
-    </div>
-  );
-}
-
-function QR({ url, size = 144, onClick }) {
-  if (!url) return null;
-  const src = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(url)}`;
-  return (
-    <img
-      src={src}
-      alt="QR Code"
-      width={size}
-      height={size}
-      onClick={onClick}
-      role={onClick ? "button" : undefined}
-      className={cx(
-        "rounded-lg border border-white/20 bg-white/10 p-2",
-        onClick && "cursor-pointer hover:bg-white/20 transition-colors"
-      )}
-    />
-  );
-}
-
-function Badge({ children, tone }) {
-  const m = {
-    success: "border-green-400/30 bg-green-400/15 text-green-100",
-    info: "border-blue-400/30 bg-blue-400/15 text-blue-100",
-    default: "border-white/20 bg-white/10 text-white/80",
-  };
-  return (
-    <span className={cx("rounded-full border px-2.5 py-0.5 text-xs font-medium", m[tone] || m.default)}>
-      {children}
-    </span>
-  );
-}
-
-function SkeletonLoader({ className }) {
-  return <div className={cx("bg-white/10 animate-pulse rounded-lg", className)} />;
-}
-
-function EmptyState({ icon, title, message, actionText, onAction }) {
-  return (
-    <Card className="p-8 text-center flex flex-col items-center">
-      <div className="w-16 h-16 text-white/30 mb-4">{icon}</div>
-      <h3 className="text-lg font-semibold text-white mb-1">{title}</h3>
-      <p className="text-sm text-white/60 mb-6 max-w-xs">{message}</p>
-      {actionText && onAction && (
-        <button
-          onClick={onAction}
-          className="rounded-lg border border-white/20 bg-white/10 hover:bg-white/20 px-4 py-2 text-sm font-semibold transition-colors"
-        >
-          {actionText}
-        </button>
-      )}
-    </Card>
-  );
-}
 
 /*************************
  * ROOT APP
@@ -485,7 +203,6 @@ export default function App() {
             </div>
             <div>
               <div className="text-base font-semibold">Fyne Skincare Creator Hub</div>
-              <div className="text-xs text-white/60">Glassy • Mobile-first</div>
             </div>
           </div>
           <div className="hidden sm:flex items-center gap-2">
@@ -613,7 +330,7 @@ function AffiliateOnboarding({ profile, setProfile, onFinish }) {
 
         <div className="mt-6 text-center">
           <button onClick={finishOnboarding} className="text-xs text-white/50 hover:text-white hover:underline">
-            Done for now, take me to the app
+            Skip onboarding for now
           </button>
         </div>
       </Card>
@@ -820,7 +537,7 @@ function AffiliateProfilePage({ profile, setProfile, showToast, onLogout }) {
       <div className="flex flex-col sm:flex-row items-start gap-6">
         <div className="flex flex-col items-center">
           <ProfilePhotoPicker value={localProfile.photo || ""} onChange={onPhotoChange} />
-          <p className="text-xs text-white/50 mt-2 text-center">Photo is saved locally.</p>
+          <p className="text-xs text-white/50 mt-2 text-center">Your profile photo is stored in your browser.</p>
         </div>
         <div className="flex-1 w-full space-y-4">
           <Input id="profile-tiktok" label="TikTok Username" value={localProfile.tiktok} onChange={(e) => setLocalProfile({ ...localProfile, tiktok: e.target.value })} placeholder="@yourtiktok" error={errors.tiktok} required />
@@ -1059,13 +776,13 @@ function AffiliateStats({ requests, profile }) {
         {totals.series.map((s) => (
           <div key={s.date} className="flex flex-col items-center gap-1 group">
             <div className="relative w-full h-full flex items-end">
-              <div title={`${s.date}: ${s.count} tasks`} className="w-full bg-blue-400/70 rounded-sm hover:bg-blue-300 transition-colors" style={{ height: `${(s.count / totals.max) * 100}%` }} />
+              <div title={`${s.date}: ${s.count} tasks`} className="w-full bg-gradient-to-t from-blue-500 to-blue-300 rounded-md hover:from-blue-400 hover:to-blue-200 transition-colors" style={{ height: `${(s.count / totals.max) * 100}%` }} />
             </div>
           </div>
         ))}
       </div>
       <div className="mt-1 grid grid-cols-7 text-[10px] text-white/60">
-        {totals.series.map((s, i) => (i % 2 === 0 ? <div key={s.date} className="text-center">{s.date.slice(5)}</div> : <div key={s.date}></div>))}
+        {totals.series.map((s, i) => (i % 2 === 0 ? <div key={s.date} className="text-center">{fmtDate(s.date)}</div> : <div key={s.date}></div>))}
       </div>
     </Card>
   );
@@ -1112,14 +829,7 @@ function AdminScreen({ products, setProducts, requests, setRequests, passwordRes
   );
 }
 
-function Stat({ label, value }) {
-  return (
-    <div className="rounded-lg border border-white/10 bg-white/5 backdrop-blur-md p-4 text-center">
-      <div className="text-3xl font-semibold">{value}</div>
-      <div className="text-xs uppercase tracking-wider text-white/60">{label}</div>
-    </div>
-  );
-}
+
 
 function UsersPanel({ showToast }) {
   const [users, setUsers] = useState([]);
@@ -1163,8 +873,8 @@ function UsersPanel({ showToast }) {
               <Badge tone={u.status === 'approved' ? 'success' : u.status === 'pending' ? 'info' : 'default'}>{u.status}</Badge>
               {u.status === 'pending' && (
                 <>
-                  <button onClick={() => handleApprove(u.id, u.displayName)} className="rounded-lg bg-green-500 hover:bg-green-600 px-3 py-1.5 text-xs font-semibold transition-colors">Approve</button>
-                  <button onClick={() => handleReject(u.id, u.displayName)} className="rounded-lg bg-red-500 hover:bg-red-600 px-3 py-1.5 text-xs font-semibold transition-colors">Reject</button>
+                  <button onClick={() => handleApprove(u.id, u.displayName)} className="rounded-lg bg-green-500/20 hover:bg-green-500/40 px-3 py-1.5 text-xs font-semibold transition-colors text-green-300">Approve</button>
+                  <button onClick={() => handleReject(u.id, u.displayName)} className="rounded-lg bg-red-500/20 hover:bg-red-500/40 px-3 py-1.5 text-xs font-semibold transition-colors text-red-300">Reject</button>
                 </>
               )}
             </div>
@@ -1199,7 +909,7 @@ function PasswordResetPanel({ resets, setResets, showToast }) {
                 <p className="text-xs text-white/60">Requested on: {new Date(reset.createdAt).toLocaleString()}</p>
               </div>
               <div className="flex items-center gap-2 w-full sm:w-auto">
-                <button onClick={() => handleMarkCompleted(reset.id)} className="rounded-lg bg-green-500 hover:bg-green-600 px-3 py-2.5 text-sm font-semibold transition-colors">
+                <button onClick={() => handleMarkCompleted(reset.id)} className="rounded-lg bg-green-500/20 hover:bg-green-500/40 px-3 py-2.5 text-sm font-semibold transition-colors text-green-300">
                   Mark Completed
                 </button>
               </div>
@@ -1239,21 +949,7 @@ function RequestsPanel({ requests, setRequests, showToast, showUndoToast }) {
       .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
   }, [requests, statusFilter, q]);
 
-  const SearchHighlight = ({ text, highlight }) => {
-    if (!highlight || !text) return text;
-    const parts = text.split(new RegExp(`(${highlight})`, 'gi'));
-    return (
-      <span>
-        {parts.map((part, i) =>
-          part.toLowerCase() === highlight.toLowerCase() ? (
-            <span key={i} className="bg-yellow-400/30 text-yellow-100">{part}</span>
-          ) : (
-            part
-          )
-        )}
-      </span>
-    );
-  };
+  
 
   const updateStatus = async (ids, newStatus) => {
     const originalRequests = [...requests];
@@ -1311,7 +1007,7 @@ function RequestsPanel({ requests, setRequests, showToast, showUndoToast }) {
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
-              className={cx("rounded-full px-3 py-1.5 text-xs font-medium transition-colors", statusFilter === s ? "bg-white/20 text-white" : "bg-white/5 text-white/70 hover:bg-white/10")}
+              className={cx("rounded-full px-3 py-1.5 text-xs font-medium transition-colors", statusFilter === s ? "bg-blue-500/30 text-blue-100" : "bg-white/10 text-white/80 hover:bg-white/20")}
             >
               {s}
             </button>
@@ -1453,12 +1149,15 @@ function BulkImportCard({ onImport, showToast }) {
 
         <div className="p-4 rounded-lg bg-white/5 border border-white/10">
           <h3 className="font-semibold mb-2">Option 2: Upload a CSV File</h3>
-          <input
-            type="file"
-            accept=".csv,text/csv"
-            className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20 transition-colors"
-            onChange={(e) => onCsvFilePicked(e.target.files?.[0])}
-          />
+          <label className="block w-full rounded-lg border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white text-center cursor-pointer hover:bg-white/20 transition-colors">
+            Choose CSV File
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => onCsvFilePicked(e.target.files?.[0])}
+            />
+          </label>
         </div>
       </div>
     </Card>
@@ -1563,8 +1262,8 @@ function ProductsPanel({ products, setProducts, showToast, showUndoToast }) {
               </div>
               <div className="flex items-center gap-2">
                 <Badge tone={p.active ? 'success' : 'default'}>{p.active ? 'Active' : 'Archived'}</Badge>
-                <button onClick={() => setEditing(p)} className="text-xs text-blue-400 hover:underline">Edit</button>
-                <button onClick={() => handleArchiveToggle(p.id, p.active)} className="text-xs text-red-400 hover:underline">{p.active ? 'Archive' : 'Restore'}</button>
+                <button onClick={() => setEditing(p)} className="rounded-lg bg-white/10 hover:bg-white/20 px-2 py-1 text-xs font-semibold transition-colors">Edit</button>
+                <button onClick={() => handleArchiveToggle(p.id, p.active)} className="rounded-lg bg-red-500/20 hover:bg-red-500/40 px-2 py-1 text-xs font-semibold transition-colors text-red-300">{p.active ? 'Archive' : 'Restore'}</button>
               </div>
             </div>
           ))}
@@ -1601,12 +1300,22 @@ function EditProductSheet({ product, onClose, onSave }) {
           <Input id="prod-comm" label="Commission" value={p.commission || ''} onChange={(e) => setP({ ...p, commission: e.target.value })} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-white/80 mb-1.5">Availability Start</label>
-              <input type="datetime-local" value={toDTLocal(p.availabilityStart)} onChange={(e) => setP({ ...p, availabilityStart: fromDTLocal(e.target.value) })} className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <Input
+                id="prod-avail-start"
+                label="Availability Start"
+                type="datetime-local"
+                value={toDTLocal(p.availabilityStart)}
+                onChange={(e) => setP({ ...p, availabilityStart: fromDTLocal(e.target.value) })}
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-white/80 mb-1.5">Availability End</label>
-              <input type="datetime-local" value={toDTLocal(p.availabilityEnd)} onChange={(e) => setP({ ...p, availabilityEnd: fromDTLocal(e.target.value) })} className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <Input
+                id="prod-avail-end"
+                label="Availability End"
+                type="datetime-local"
+                value={toDTLocal(p.availabilityEnd)}
+                onChange={(e) => setP({ ...p, availabilityEnd: fromDTLocal(e.target.value) })}
+              />
             </div>
           </div>
           <div className="mt-6 flex justify-end gap-3">

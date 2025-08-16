@@ -1,15 +1,12 @@
 // src/components/AffiliateMyTasks.jsx
 import React from "react";
 import { listTasksByUser, updateTask } from "../utils/auth";
+import Card from './Card';
+import { Input, Badge, EmptyState } from "./common";
+import { cx } from "./common/utils";
+import { ClipboardDocumentListIcon } from "./common/icons";
 
-const STATUS = ["Pending", "Video Submitted", "Ad Code Submitted", "Complete"];
-
-function cx(...c) { return c.filter(Boolean).join(" "); }
-function Card({ className = "", children }) {
-    return <div className={cx("rounded-2xl border border-white/15 bg-white/5 p-3", className)}>{children}</div>;
-}
-
-export default function AffiliateMyTasks({ me }) {
+export default function AffiliateMyTasks({ me, setAffView }) {
     const [tasks, setTasks] = React.useState([]);
     const [busy, setBusy] = React.useState(false);
 
@@ -51,12 +48,13 @@ export default function AffiliateMyTasks({ me }) {
 
     if (!tasks.length) {
         return (
-            <Card>
-                <div className="flex items-center justify-between">
-                    <div>No tasks yet. Go to Products and create one.</div>
-                    <button onClick={refresh} className="rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-xs">Refresh</button>
-                </div>
-            </Card>
+            <EmptyState
+                icon={<ClipboardDocumentListIcon className="w-full h-full" />}
+                title="No Tasks Yet"
+                message="You haven't created any tasks. Browse the products and add one to your showcase to get started."
+                actionText="Browse Products"
+                onAction={() => setAffView("products")}
+            />
         );
     }
 
@@ -80,30 +78,30 @@ export default function AffiliateMyTasks({ me }) {
                             <select
                                 value={t.status}
                                 onChange={(e) => save(t.id, { status: e.target.value })}
-                                className="rounded-lg border border-white/20 bg-white text-black px-2 py-1 text-xs"
+                                className="rounded-lg border border-white/20 bg-white/10 text-white px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                                 {STATUS.map((s) => (
-                                    <option key={s} value={s} className="text-black bg-white">{s}</option>
+                                    <option key={s} value={s}>{s}</option>
                                 ))}
                             </select>
                             <button onClick={refresh} disabled={busy} className={cx("rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-xs", busy && "opacity-60")}>Refresh</button>
                         </div>
                     </div>
 
-                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                        <input
+                    <div className="mt-2 space-y-2">
+                        <Input
+                            label="TikTok Video Link"
                             value={t.videoLink}
                             onChange={(e) => setLocal(t.id, { videoLink: e.target.value })}
                             onBlur={(e) => save(t.id, { videoLink: e.target.value, status: e.target.value ? "Video Submitted" : t.status })}
-                            placeholder="TikTok video link"
-                            className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs"
+                            placeholder="https://www.tiktok.com/..."
                         />
-                        <input
+                        <Input
+                            label="Ad Code"
                             value={t.adCode}
                             onChange={(e) => setLocal(t.id, { adCode: e.target.value })}
                             onBlur={(e) => save(t.id, { adCode: e.target.value, status: e.target.value ? "Ad Code Submitted" : t.status })}
-                            placeholder="Ad code"
-                            className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs"
+                            placeholder="e.g., TIKTOKAD123"
                         />
                     </div>
                 </Card>

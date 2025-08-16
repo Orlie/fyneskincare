@@ -1,17 +1,12 @@
 import React, { useMemo } from 'react';
 import Card from './Card';
-
-// Assuming QR and Badge are now imported or globally available from App.jsx
-// If not, you would need to import them like: import { QR, Badge } from '../App';
-// For this update, I'm assuming they are accessible.
+import { Badge, QR } from "./common";
+import { cx } from "./common/utils";
 
 // Helper function
 const fmtDate = (iso) => {
     try { return new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit" }).format(new Date(iso)); } catch { return "—"; }
 };
-
-// Helper function (cx is defined in App.jsx, assuming it's accessible or you have a local one)
-const cx = (...c) => c.filter(Boolean).join(" ");
 
 function ProductDetailsPage({ product, onBack, onCreateTask, myTask }) {
     const inWindow = useMemo(() => {
@@ -57,11 +52,7 @@ function ProductDetailsPage({ product, onBack, onCreateTask, myTask }) {
                                 {hasOpenTask ? "Task Already Open" : isComplete ? "Task Completed" : !inWindow ? "Not Available" : "Add to Showcase"}
                             </button>
                             <div className="flex flex-col items-center justify-center gap-2 mt-4">
-                                {/* Assuming QR component is accessible */}
                                 <QR url={product.shareLink} onClick={handleAction} />
-                                <button onClick={handleAction} className="text-xs text-blue-400 hover:underline">
-                                    or tap here to Add to Showcase
-                                </button>
                             </div>
                         </div>
                     </div>
