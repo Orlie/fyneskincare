@@ -187,10 +187,18 @@ function parseCSVText(csvText) {
     skipEmptyLines: true,
     transformHeader: (h) => h.trim(),
   });
+
   if (errors?.length) {
+    console.warn("PapaParse errors encountered:", errors);
     const f = errors[0];
     throw new Error(`CSV parse error at row ${f.row ?? "?"}: ${f.message}`);
   }
+
+  console.log(`Parsed ${data.length} rows from CSV.`);
+  if (data.length > 0) {
+    console.log("First 5 parsed rows:", data.slice(0, 5));
+  }
+
   return data.map(normalizeProductRow);
 }
 function sheetUrlToCsv(url) {
