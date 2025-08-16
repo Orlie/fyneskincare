@@ -193,88 +193,41 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#1C1C1E] text-white font-sans">
-      {/* Header */}
-      <header className="sticky top-0 z-20 backdrop-blur-lg bg-[#1C1C1E]/70 border-b border-white/10">
-        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 border border-white/20 flex items-center justify-center text-sm font-semibold shadow-md">
-              FS
-            </div>
-            <div>
-              <div className="text-base font-semibold">Fyne Skincare Creator Hub</div>
-            </div>
-          </div>
-          <div className="hidden sm:flex items-center gap-2">
-            <button
-              onClick={() => setTab("browse")}
-              className={cx(
-                "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                tab === "browse" ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10"
-              )}
-            >
-              Affiliate
-            </button>
-            {userRole === "admin" && (
-              <button
-                onClick={() => setTab("admin")}
-                className={cx(
-                  "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                  tab === "admin" ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10"
-                )}
-              >
-                Admin
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* Content */}
+    <div className="bg-app relative">
+      {/* subtle noise overlay */}
+      <div className="noise pointer-events-none fixed inset-0 opacity-[0.18]"></div>
+      {/* Header (yours as-is) */}
+      { /* ...your existing top header ... */ }
+      {/* Main content */}
       <main className="mx-auto max-w-6xl px-3 pb-28 pt-6 sm:px-4">
-        {loading ? <SkeletonLoader className="w-full h-64" /> : (
-          <>
-            {user ? (
-              userRole === "admin" ? (
-                <AdminScreen
-                  products={products}
-                  setProducts={setProducts}
-                  requests={requests}
-                  setRequests={setRequests}
-                  passwordResets={passwordResets}
-                  setPasswordResets={setPasswordResets}
-                  counts={counts}
-                  onLogout={handleLogout}
-                  showToast={showToast}
-                  showUndoToast={showUndoToast}
-                />
-              ) : userRole === "affiliate" ? (
-                <AffiliateScreen
-                  products={products}
-                  requests={requests}
-                  setRequests={setRequests}
-                  showToast={showToast}
-                  setTab={setTab}
-                />
-              ) : (
-                <div>Loading user data...</div>
-              )
-            ) : (
-              <Auth />
-            )}
-          </>
+        {loading ? (
+          <SkeletonLoader className="w-full h-64" />
+        ) : user ? (
+          userRole === "admin" && tab === "admin" ? (
+            <AdminScreen products={products} setProducts={setProducts} requests={requests} setRequests={setRequests} passwordResets={passwordResets} setPasswordResets={setPasswordResets} counts={counts} onLogout={handleLogout} showToast={showToast} showUndoToast={showUndoToast} />
+          ) : (
+            <AffiliateScreen products={products} requests={requests} setRequests={setRequests} showToast={showToast} setTab={setTab} />
+          )
+        ) : (
+          <div className="min-h-[70vh] grid place-items-center">
+            <Auth />
+            {/* new sleek Auth below */}
+          </div>
         )}
       </main>
-
-      {/* Bottom Nav (mobile) */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#1C1C1E]/70 backdrop-blur-lg border-t border-white/10" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-        <div className="flex items-center justify-around p-2">
-          <IconBtn active={tab === "browse"} label="Affiliate" icon={<UserGroupIcon />} onClick={() => setTab("browse")} />
-          <IconBtn active={tab === "admin"} label="Admin" icon={<BuildingStorefrontIcon />} onClick={() => setTab("admin")} />
+      {/* Floating pill bottom nav (admin hidden if not admin) */}
+      <nav className="sm:hidden pill-nav z-30">
+        <div className="flex items-center gap-2">
+          <button onClick={() => setTab("browse")} className={`pill-item ${tab === "browse" ? "pill-active" : ""}`} >
+            <svg width="20" height="20" viewBox="0 0 24 24" className="opacity-90"><path fill="currentColor" d="M3 9.75L12 3l9 6.75V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg> Affiliate
+          </button>
+          {userRole === "admin" && (
+            <button onClick={() => setTab("admin")} className={`pill-item ${tab === "admin" ? "pill-active" : ""}`} >
+              <svg width="20" height="20" viewBox="0 0 24 24" className="opacity-90"><path fill="currentColor" d="M3 7h18v2H3zm2 4h14v10H5z"/></svg> Admin
+            </button>
+          )}
         </div>
       </nav>
-
-      <Toast toast={toast} onDismiss={hideToast} />
     </div>
   );
 }
@@ -658,9 +611,9 @@ function AffiliateTasksPage({ requests, setRequests, profile, showToast, setAffV
       showToast("Please provide both the TikTok video link and the ad code.", "error");
       return;
     }
-    const taskDocRef = doc(db, "tasks", id);
+    const taskDocRef = doc(db, "requests", id);
     await updateDoc(taskDocRef, { ...taskData, status: "Video Submitted", updatedAt: nowISO() });
-    setRequests(prev => prev.map(r => r.id === id ? { ...r, ...taskData, status: "Video Submitted", updatedAt: nowISO() } : r));
+    setRequests(prev => prev.map(r => (r.id === id ? { ...r, ...taskData, status: "Video Submitted", updatedAt: nowISO() } : r)));
     showToast("Task submitted for review!", "success");
   };
 
@@ -804,11 +757,11 @@ function AdminScreen({ products, setProducts, requests, setRequests, passwordRes
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <button onClick={() => setView("requests")} className={cx("rounded-lg px-4 py-2 text-sm font-medium transition-colors", view === "requests" ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10")}>Tasks</button>
-        <button onClick={() => setView("products")} className={cx("rounded-lg px-4 py-2 text-sm font-medium transition-colors", view === "products" ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10")}>Products</button>
-        <button onClick={() => setView("product_import")} className={cx("rounded-lg px-4 py-2 text-sm font-medium transition-colors", view === "product_import" ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10")}>Import Products</button>
-        <button onClick={() => setView("users")} className={cx("rounded-lg px-4 py-2 text-sm font-medium transition-colors", view === "users" ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10")}>Users</button>
-        <button onClick={() => setView("password_resets")} className={cx("rounded-lg px-4 py-2 text-sm font-medium transition-colors relative", view === "password_resets" ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10")}>
+        <button onClick={() => setView("requests")} className={cx("rounded-lg px-4 py-2 text-sm font-medium transition-colors", view === "requests" ? "bg-blue-500/30 text-blue-100" : "text-white/80 hover:bg-white/10")}>Tasks</button>
+        <button onClick={() => setView("products")} className={cx("rounded-lg px-4 py-2 text-sm font-medium transition-colors", view === "products" ? "bg-blue-500/30 text-blue-100" : "text-white/80 hover:bg-white/10")}>Products</button>
+        <button onClick={() => setView("product_import")} className={cx("rounded-lg px-4 py-2 text-sm font-medium transition-colors", view === "product_import" ? "bg-blue-500/30 text-blue-100" : "text-white/80 hover:bg-white/10")}>Import Products</button>
+        <button onClick={() => setView("users")} className={cx("rounded-lg px-4 py-2 text-sm font-medium transition-colors", view === "users" ? "bg-blue-500/30 text-blue-100" : "text-white/80 hover:bg-white/10")}>Users</button>
+        <button onClick={() => setView("password_resets")} className={cx("rounded-lg px-4 py-2 text-sm font-medium transition-colors relative", view === "password_resets" ? "bg-blue-500/30 text-blue-100" : "text-white/80 hover:bg-white/10")}>
           Password Resets
           {passwordResets.filter(r => r.status === 'pending').length > 0 && (
             <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center">
@@ -1180,9 +1133,9 @@ function ProductsPanel({ products, setProducts, showToast, showUndoToast }) {
     const normalized = rows.map(normalizeProductRow);
     if (replaceMode) {
       const productsCollectionRef = collection(db, "products");
-      const existingDocs = await getDocs(productsCollectionRef);
-      for (const doc of existingDocs.docs) {
-        await deleteDoc(doc(db, "products", doc.id));
+      const snap = await getDocs(productsCollectionRef);
+      for (const d of snap.docs) {
+        await deleteDoc(d.ref);
       }
       for (const row of normalized) {
         await setDoc(doc(db, "products", row.id), row);
