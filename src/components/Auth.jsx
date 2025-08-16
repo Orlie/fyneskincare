@@ -1,145 +1,144 @@
-import { useState } from "react";
-import { auth, db } from "../firebase";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
-import { loginAdmin, ADMIN_USERNAME } from "../utils/auth";
+import React, { useState } from 'react';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { auth, db } from '../firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
-export default function Auth() {
-  const [email, setEmail] = useState("");
-  const [pw, setPw] = useState("");
-  const [confirmPw, setConfirmPw] = useState(""); // New state for confirm password
-  const [name, setName] = useState(""); // New state for user's name
-  const [show, setShow] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [isLogin, setIsLogin] = useState(true); // State to toggle between login and signup
+const Auth = () => {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState(null);
+  const [message, setMessage] = useState(null);
 
-  async function handleSubmit(e) {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+    setMessage(null);
+
+    if (!isLogin && password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
     try {
       if (isLogin) {
-        if (email === ADMIN_USERNAME) {
-          const adminSession = loginAdmin(email, pw);
-          if (adminSession) {
-            console.log("Admin logged in successfully!");
-            // You might want to redirect or update UI based on adminSession
-          } else {
-            setError("Invalid admin credentials.");
-          }
-        } else {
-          await signInWithEmailAndPassword(auth, email, pw);
-          console.log("User logged in successfully!");
-        }
+        await signInWithEmailAndPassword(auth, email, password);
+        console.log('User logged in successfully!');
       } else {
-        // Sign-up logic
-        if (pw !== confirmPw) {
-          setError("Passwords do not match.");
-          setLoading(false);
-          return;
-        }
-        const userCredential = await createUserWithEmailAndPassword(auth, email, pw);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         await setDoc(doc(db, "users", userCredential.user.uid), {
+          name: name,
           email: userCredential.user.email,
-          name: name, // Store the user's name
           role: "affiliate", // Default role for new sign-ups
           uid: userCredential.user.uid,
           onboardingCompleted: false,
         });
-        console.log("User registered successfully!");
+        console.log('User registered successfully!');
       }
     } catch (err) {
       setError(err.message);
-      console.error("Authentication error:", err.message);
-    } finally {
-      setLoading(false);
+      console.error('Authentication error:', err.message);
     }
-  }
+  };
 
-  async function handleForgotPassword() {
+  const handleForgotPassword = async () => {
     if (!email) {
-      setError("Please enter your email to reset password.");
+      setError("Please enter your email address to reset your password.");
       return;
     }
-    setLoading(true);
-    setError(null);
     try {
+      // Note: This sends a password reset email to the user, not the admin.
+      // For security reasons, Firebase doesn't support directly changing a user's password from an admin action like this without a more complex setup (e.g., custom server, cloud functions).
+      // The email will contain a link for the user to reset their own password.
       await sendPasswordResetEmail(auth, email);
-      alert("Password reset email sent! Check your inbox.");
+      setMessage("Password reset email sent. Please check your inbox.");
     } catch (err) {
       setError(err.message);
-      console.error("Password reset error:", err.message);
-    } finally {
-      setLoading(false);
+      console.error('Password reset error:', err.message);
     }
-  }
+  };
 
   return (
-    <div className="card w-full max-w-md p-7">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-500 grid place-items-center shadow-lg">
-          <span className="text-white font-black">FS</span>
-        </div>
-        <div>
-          <p className="text-xs uppercase tracking-wider text-white/50">Fyne Skincare</p>
-          <h1 className="text-lg font-semibold">Creator Hub</h1>
-        </div>
-      </div>
-      <h2 className="text-xl font-semibold mb-1">{isLogin ? "Welcome back 👋" : "Join the Hub!"}</h2>
-      <p className="text-white/60 text-sm mb-6">
-        {isLogin ? "Log in to manage products, tasks, and payouts." : "Sign up to start managing products, tasks, and payouts."}
-      </p>
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <div style={{ maxWidth: '400px', margin: '50px auto', padding: '20px', border: '1px solid #ccc', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+      <h2>{isLogin ? 'Login' : 'Sign Up'}</h2>
+      <form onSubmit={handleSubmit}>
         {!isLogin && (
-          <div>
-            <label className="label" htmlFor="name">Name</label>
-            <input id="name" type="text" className="input" placeholder="Your Name" value={name} onChange={(e) => setName(e.target.value)} required autoComplete="name" />
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '5px' }}>Name:</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              style={{ width: '100%', padding: '8px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ddd' }}
+            />
           </div>
         )}
-        <div>
-          <label className="label" htmlFor="email">Email</label>
-          <input id="email" type="email" className="input" placeholder="you @example.com" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+        <div style={{ marginBottom: '15px' }}>
+          <label style={{ display: 'block', marginBottom: '5px' }}>Email:</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            style={{ width: '100%', padding: '8px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ddd' }}
+          />
         </div>
-        <div>
-          <label className="label" htmlFor="password">Password</label>
-          <div className="relative">
-            <input id="password" type={show ? "text" : "password"} className="input pr-12" value={pw} onChange={(e) => setPw(e.target.value)} required autoComplete={isLogin ? "current-password" : "new-password"} />
-            <button type="button" onClick={() => setShow((s) => !s)} className="absolute right-2 top-1/2 -translate-y-1/2 btn-secondary px-3 py-1.5 text-xs" aria-label={show ? "Hide password" : "Show password"} >
-              {show ? "Hide" : "Show"}
-            </button>
-          </div>
+        <div style={{ marginBottom: '15px' }}>
+          <label style={{ display: 'block', marginBottom: '5px' }}>Password:</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            style={{ width: '100%', padding: '8px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ddd' }}
+          />
         </div>
         {!isLogin && (
-          <div>
-            <label className="label" htmlFor="confirm-password">Confirm Password</label>
-            <div className="relative">
-              <input id="confirm-password" type={show ? "text" : "password"} className="input pr-12" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} required autoComplete="new-password" />
-              <button type="button" onClick={() => setShow((s) => !s)} className="absolute right-2 top-1/2 -translate-y-1/2 btn-secondary px-3 py-1.5 text-xs" aria-label={show ? "Hide password" : "Show password"} >
-                {show ? "Hide" : "Show"}
-              </button>
-            </div>
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '5px' }}>Confirm Password:</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              style={{ width: '100%', padding: '8px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #ddd' }}
+            />
           </div>
         )}
-        {isLogin && (
-          <div className="flex items-center justify-between text-sm">
-            <label className="inline-flex items-center gap-2 text-white/70">
-              <input type="checkbox" className="size-4 rounded border-white/20 bg-white/10" /> Remember me
-            </label>
-            <button type="button" onClick={handleForgotPassword} className="text-indigo-300 hover:text-indigo-200">Forgot password?</button>
-          </div>
-        )}
-        <button className="btn-primary" disabled={loading}>
-          {loading ? (isLogin ? "Signing in…" : "Signing up…") : (isLogin ? "Sign in" : "Sign up")}
+        <button type="submit" style={{ width: '100%', padding: '10px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+          {isLogin ? 'Login' : 'Sign Up'}
         </button>
       </form>
-      {error && <p className="mt-4 text-center text-sm text-red-300">{error}</p>}
-      <p className="mt-6 text-center text-sm text-white/70">
-        {isLogin ? "Don’t have an account?" : "Already have an account?"}{" "}
-        <button type="button" onClick={() => setIsLogin((prev) => !prev)} className="text-indigo-300 hover:text-indigo-200">
-          {isLogin ? "Sign up" : "Sign in"}
+      {error && <p style={{ color: 'red', marginTop: '10px' }}>{error}</p>}
+      {message && <p style={{ color: 'green', marginTop: '10px' }}>{message}</p>}
+      {isLogin && (
+        <p style={{ textAlign: 'center', marginTop: '10px' }}>
+          <button
+            onClick={handleForgotPassword}
+            style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', textDecoration: 'underline' }}
+          >
+            Forgot Password?
+          </button>
+        </p>
+      )}
+      <p style={{ textAlign: 'center', marginTop: '20px' }}>
+        {isLogin ? "Don't have an account?" : "Already have an account?"}{' '}
+        <button
+          onClick={() => {
+            setIsLogin(!isLogin);
+            setError(null);
+            setMessage(null);
+          }}
+          style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', textDecoration: 'underline' }}
+        >
+          {isLogin ? 'Sign Up' : 'Login'}
         </button>
       </p>
     </div>
   );
-}
+};
+
+export default Auth;

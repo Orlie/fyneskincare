@@ -1,7 +1,7 @@
 // src/utils/auth.js — localStorage demo store (backwards-compatible)
 
-export const ADMIN_USERNAME = "orlie@gmail.com";
-const ADMIN_PASSWORD = "Skyland#123";
+export const ADMIN_USERNAME = "admin@fyne.app";
+const ADMIN_PASSWORD = "admin123";
 
 const LSK_USERS = "fyne_users_v1";
 const LSK_SESSION = "fyne_session_v1";

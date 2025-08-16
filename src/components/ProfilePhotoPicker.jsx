@@ -1,33 +1,84 @@
-import React, { useRef } from "react";
-import { cx } from "./common/utils";
+// src/components/ProfilePhotoPicker.jsx
+import React from "react";
 
-const ProfilePhotoPicker = ({ value, onChange }) => {
-  const fileInputRef = useRef(null);
-  const handlePick = () => fileInputRef.current?.click();
-  const onFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (readEvent) => {
-      onChange(readEvent.target?.result);
-    };
-    reader.readAsDataURL(file);
-  };
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <div
-        className="w-24 h-24 rounded-full bg-white/10 border border-white/20 flex items-center justify-center cursor-pointer hover:bg-white/20 transition-colors"
-        onClick={handlePick}
-      >
-        {value ? (
-          <img src={value} alt="Profile" className="w-full h-full rounded-full object-cover" />
-        ) : (
-          <span className="text-xs text-white/50 text-center">Tap to add photo</span>
-        )}
-      </div>
-      <input type="file" accept="image/*" ref={fileInputRef} onChange={onFileChange} className="hidden" />
-    </div>
-  );
-};
+export default function ProfilePhotoPicker({ value = "", onChange }) {
+    const [img, setImg] = React.useState(value || "");
+    const fileRef = React.useRef(null);
 
-export default ProfilePhotoPicker;
+    React.useEffect(() => {
+        setImg(value || "");
+    }, [value]);
+
+    function pick() {
+        fileRef.current?.click();
+    }
+
+    function handleFile(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const dataUrl = String(reader.result || "");
+            setImg(dataUrl);
+            onChange?.(dataUrl);
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function onInputChange(e) {
+        const f = e.target.files?.[0];
+        handleFile(f);
+    }
+
+    function onDrop(e) {
+        e.preventDefault();
+        const f = e.dataTransfer?.files?.[0];
+        handleFile(f);
+    }
+
+    function onDragOver(e) {
+        e.preventDefault();
+    }
+
+    function clearPhoto() {
+        setImg("");
+        onChange?.("");
+        if (fileRef.current) fileRef.current.value = "";
+    }
+
+    return (
+        <div className="flex items-center gap-3" onDrop={onDrop} onDragOver={onDragOver}>
+            {img ? (
+                <img src={img} alt="Profile" className="h-14 w-14 rounded-full object-cover border border-white/20" />
+            ) : (
+                <div className="h-14 w-14 rounded-full bg-white/10 border border-white/20" />
+            )}
+
+            <div className="flex items-center gap-2">
+                <button
+                    type="button"
+                    onClick={pick}
+                    className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm"
+                >
+                    {img ? "Change photo" : "Upload photo"}
+                </button>
+                {img && (
+                    <button
+                        type="button"
+                        onClick={clearPhoto}
+                        className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm"
+                    >
+                        Remove
+                    </button>
+                )}
+            </div>
+
+            <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                onChange={onInputChange}
+                className="hidden"
+            />
+        </div>
+    );
+}
