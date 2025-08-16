@@ -6,6 +6,7 @@ import { db } from "./firebase";
 import { collection, getDocs, doc, updateDoc, query, where, getDoc, setDoc, addDoc, deleteDoc } from "firebase/firestore";
 import Auth from "./components/Auth";
 import ProductList from "./components/ProductList";
+import AdminProductManager from "./components/AdminProductManager";
 
 /*************************
  * PLACEHOLDER DEPENDENCIES
@@ -1092,6 +1093,7 @@ function AdminScreen({ products, setProducts, requests, setRequests, passwordRes
       <div className="flex flex-wrap gap-2">
         <button onClick={() => setView("requests")} className={cx("rounded-lg border px-3 py-2 text-sm", view === "requests" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Tasks</button>
         <button onClick={() => setView("products")} className={cx("rounded-lg border px-3 py-2 text-sm", view === "products" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Products</button>
+        <button onClick={() => setView("product_import")} className={cx("rounded-lg border px-3 py-2 text-sm", view === "product_import" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Import Products</button>
         <button onClick={() => setView("users")} className={cx("rounded-lg border px-3 py-2 text-sm", view === "users" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Users</button>
         <button onClick={() => setView("password_resets")} className={cx("rounded-lg border px-3 py-2 text-sm relative", view === "password_resets" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>
           Password Resets
@@ -1107,6 +1109,7 @@ function AdminScreen({ products, setProducts, requests, setRequests, passwordRes
 
       {view === "requests" && <RequestsPanel requests={requests} setRequests={setRequests} showToast={showToast} showUndoToast={showUndoToast} />}
       {view === "products" && <ProductsPanel products={products} setProducts={setProducts} showToast={showToast} showUndoToast={showUndoToast} />}
+      {view === "product_import" && <AdminProductManager setProducts={setProducts} showToast={showToast} />}
       {view === "users" && <UsersPanel showToast={showToast} />}
       {view === "password_resets" && <PasswordResetPanel resets={passwordResets} setResets={setPasswordResets} showToast={showToast} />}
     </div>
