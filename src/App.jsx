@@ -411,10 +411,25 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const { toast, showToast, showUndoToast, hideToast } = useToast();
   const [user, setUser] = useState(null);
+  const [userRole, setUserRole] = useState(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      if (currentUser) {
+        const userDocRef = doc(db, "users", currentUser.uid);
+        const docSnap = await getDoc(userDocRef);
+        if (docSnap.exists()) {
+          setUserRole(docSnap.data().role);
+        } else {
+          // If user document doesn't exist (e.g., old user or admin created directly in Auth),
+          // set a default role or handle as needed.
+          // For now, we'll assume non-existent user docs are affiliates.
+          setUserRole("affiliate");
+        }
+      } else {
+        setUserRole(null);
+      }
       setLoading(false);
     });
     return () => unsubscribe();
@@ -483,15 +498,17 @@ export default function App() {
             >
               Affiliate
             </button>
-            <button
-              onClick={() => setTab("admin")}
-              className={cx(
-                "px-3 py-1.5 rounded-lg text-sm border transition-colors",
-                tab === "admin" ? "bg-white/20 border-white/30" : "bg-white/5 border-white/10 hover:bg-white/10"
-              )}
-            >
-              Admin
-            </button>
+            {userRole === "admin" && (
+              <button
+                onClick={() => setTab("admin")}
+                className={cx(
+                  "px-3 py-1.5 rounded-lg text-sm border transition-colors",
+                  tab === "admin" ? "bg-white/20 border-white/30" : "bg-white/5 border-white/10 hover:bg-white/10"
+                )}
+              >
+                Admin
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -501,15 +518,7 @@ export default function App() {
         {loading ? <SkeletonLoader className="w-full h-64" /> : (
           <>
             {user ? (
-              tab === "browse" ? (
-                <AffiliateScreen
-                  products={products}
-                  requests={requests}
-                  setRequests={setRequests}
-                  showToast={showToast}
-                  setTab={setTab}
-                />
-              ) : (
+              userRole === "admin" ? (
                 <AdminScreen
                   products={products}
                   setProducts={setProducts}
@@ -522,6 +531,17 @@ export default function App() {
                   showToast={showToast}
                   showUndoToast={showUndoToast}
                 />
+              ) : userRole === "affiliate" ? (
+                <AffiliateScreen
+                  products={products}
+                  requests={requests}
+                  setRequests={setRequests}
+                  showToast={showToast}
+                  setTab={setTab}
+                />
+              ) : (
+                // Loading state or unauthorized message for users without a defined role yet
+                <div>Loading user data...</div>
               )
             ) : (
               <Auth />

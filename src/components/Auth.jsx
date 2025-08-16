@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
 const Auth = () => {
   const [email, setEmail] = useState('');
@@ -16,7 +17,13 @@ const Auth = () => {
         await signInWithEmailAndPassword(auth, email, password);
         console.log('User logged in successfully!');
       } else {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        await setDoc(doc(db, "users", userCredential.user.uid), {
+          email: userCredential.user.email,
+          role: "affiliate", // Default role for new sign-ups
+          uid: userCredential.user.uid,
+          onboardingCompleted: false,
+        });
         console.log('User registered successfully!');
       }
     } catch (err) {
