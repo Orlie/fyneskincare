@@ -1233,6 +1233,8 @@ function ProductDetailsPage({ product, onBack, onCreateTask, myTask }) {
 }
 
 function AffiliateTasksPage({ requests, setRequests, profile, me, showToast, setAffView }) {
+  const [taskInputs, setTaskInputs] = useState({});
+
   const mine = useMemo(() => {
     const isMine = (t) =>
       (profile.email && t.affiliateEmail === profile.email) ||
@@ -1241,66 +1243,116 @@ function AffiliateTasksPage({ requests, setRequests, profile, me, showToast, set
     return requests.filter(isMine).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }, [requests, profile, me?.id]);
 
-  const handleSubmit = async (id, videoLink, adCode) => {
+  useEffect(() => {
+    // Pre-fill inputs with existing data from requests
+    const initialInputs = {};
+    mine.forEach(task => {
+      if (task.videoLink || task.adCode) {
+        initialInputs[task.id] = {
+          videoLink: task.videoLink || '',
+          adCode: task.adCode || ''
+        };
+      }
+    });
+    setTaskInputs(initialInputs);
+  }, [requests, profile, me]); // Rerun when requests change
+
+  const handleInputChange = (taskId, field, value) => {
+    setTaskInputs(prev => ({
+      ...prev,
+      [taskId]: {
+        ...(prev[taskId] || {}),
+        [field]: value,
+      }
+    }));
+  };
+
+  const handleSubmit = async (id) => {
+    const { videoLink, adCode } = taskInputs[id] || {};
     if (!videoLink || !adCode) {
       showToast("Please provide both the TikTok video link and the ad code.", "error");
       return;
     }
-    await updateTask(id, { videoLink, adCode, status: "Video Submitted" });
+    // Optimistic UI update
+    const originalRequests = [...requests];
     const updatedRequests = requests.map((r) => (r.id === id ? { ...r, videoLink, adCode, status: "Video Submitted" } : r));
     setRequests(updatedRequests);
     showToast("Task submitted for review!", "success");
+
+    try {
+        await updateTask(id, { videoLink, adCode, status: "Video Submitted" });
+    } catch (error) {
+        // Revert on error
+        setRequests(originalRequests);
+        showToast("Submission failed. Please try again.", "error");
+    }
   };
 
   return (
-    <Card className="p-3">
-      <h2 className="text-lg font-semibold mb-4">My Tasks</h2>
-      <div className="grid grid-cols-1 gap-4">
+    <Card className="p-3 sm:p-4">
+      <h2 className="text-xl font-bold mb-4">My Tasks</h2>
+      <div className="space-y-4">
         {mine.map((r) => {
           const isComplete = r.status === 'Complete';
           const isPendingInput = r.status === 'Pending';
-          let videoLink = r.videoLink || "";
-          let adCode = r.adCode || "";
+          const isUnderReview = !isComplete && !isPendingInput;
 
           return (
-            <div key={r.id} className="rounded-xl border border-white/15 bg-white/5 p-4 space-y-3">
+            <Card key={r.id} className="p-4 space-y-4 bg-white/5">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-semibold truncate" title={r.productTitle}>{r.productTitle}</div>
-                  <div className="text-xs text-white/60">Requested: {new Date(r.createdAt).toLocaleDateString()}</div>
+                <div>
+                  <h3 className="font-semibold text-base" title={r.productTitle}>{r.productTitle}</h3>
+                  <p className="text-xs text-white/60">Requested: {new Date(r.createdAt).toLocaleDateString()}</p>
                 </div>
-                <Badge tone={isComplete ? 'success' : 'info'}>{r.status}</Badge>
-              </div>
-
-              <div className="space-y-3">
-                <Input
-                  id={`video-${r.id}`}
-                  label="TikTok Video Link"
-                  value={videoLink}
-                  onChange={(e) => (videoLink = e.target.value)}
-                  placeholder="https://www.tiktok.com/..."
-                  disabled={!isPendingInput}
-                />
-                <Input
-                  id={`adcode-${r.id}`}
-                  label="Ad Code"
-                  value={adCode}
-                  onChange={(e) => (adCode = e.target.value)}
-                  placeholder="e.g., TIKTOKAD123"
-                  disabled={!isPendingInput}
-                />
+                <Badge tone={isComplete ? 'success' : isPendingInput ? 'info' : 'default'}>{r.status}</Badge>
               </div>
 
               {isPendingInput && (
-                <button
-                  onClick={() => handleSubmit(r.id, videoLink, adCode)}
-                  className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-2.5 text-sm font-semibold transition-colors"
-                >
-                  Submit for Review
-                </button>
+                <div className="space-y-3 bg-white/5 border border-white/10 rounded-xl p-4">
+                    <p className="text-sm text-white/80">Submit your content for this task. You can find the ad code in the TikTok app after using the share link.</p>
+                    <Input
+                      id={`video-${r.id}`}
+                      label="TikTok Video Link"
+                      value={taskInputs[r.id]?.videoLink || ''}
+                      onChange={(e) => handleInputChange(r.id, 'videoLink', e.target.value)}
+                      placeholder="https://www.tiktok.com/..."
+                    />
+                    <Input
+                      id={`adcode-${r.id}`}
+                      label="Ad Code"
+                      value={taskInputs[r.id]?.adCode || ''}
+                      onChange={(e) => handleInputChange(r.id, 'adCode', e.target.value)}
+                      placeholder="e.g., TIKTOKAD123"
+                    />
+                    <button
+                      onClick={() => handleSubmit(r.id)}
+                      className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-2.5 text-sm font-semibold transition-colors"
+                    >
+                      Submit for Review
+                    </button>
+                </div>
               )}
-              {isComplete && <p className="text-sm text-emerald-300 text-center font-medium">🎉 This task is complete. Great job!</p>}
-              {!isPendingInput && !isComplete && <p className="text-sm text-sky-300 text-center font-medium">This task is currently under review by an admin.</p>}
+
+              {isUnderReview && (
+                 <div className="p-4 rounded-xl bg-sky-500/10 border border-sky-500/20 text-center">
+                    <p className="text-sm font-medium text-sky-200">Your submission is under review.</p>
+                    <p className="text-xs text-sky-200/70 mt-1">An admin will check your video and ad code soon.</p>
+                    <div className="mt-2 text-left text-xs space-y-1">
+                        <p><span className="font-semibold">Video:</span> <a href={r.videoLink} target="_blank" rel="noopener noreferrer" className="underline opacity-80 hover:opacity-100">{r.videoLink}</a></p>
+                        <p><span className="font-semibold">Ad Code:</span> <span className="font-mono">{r.adCode}</span></p>
+                    </div>
+                 </div>
+              )}
+
+              {isComplete && (
+                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
+                    <p className="text-sm font-medium text-emerald-200">🎉 This task is complete. Great job!</p>
+                     <div className="mt-2 text-left text-xs space-y-1">
+                        <p><span className="font-semibold">Video:</span> <a href={r.videoLink} target="_blank" rel="noopener noreferrer" className="underline opacity-80 hover:opacity-100">{r.videoLink}</a></p>
+                        <p><span className="font-semibold">Ad Code:</span> <span className="font-mono">{r.adCode}</span></p>
+                    </div>
+                </div>
+              )}
             </div>
           )
         })}
