@@ -36,6 +36,31 @@ export async function logout() {
     localStorage.removeItem(SESSION_KEY);
     return true;
 }
+
+export async function requestPasswordReset(email) {
+    try {
+        const usersRef = collection(db, "users");
+        const q = query(usersRef, where("email", "==", email), limit(1));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            console.log("No user found with email:", email);
+            return false; // User not found
+        }
+
+        // 2. Create a password reset request
+        const resetRequest = {
+            email: email,
+            status: "pending",
+            createdAt: serverTimestamp(),
+        };
+        await addDoc(collection(db, "password_resets"), resetRequest);
+        return true;
+    } catch (error) {
+        console.error("Error requesting password reset:", error);
+        return false;
+    }
+}
 // ---- profile + password
 export function profileFromUser(u) {
     if (!u) return { email: "", name: "", tiktok: "", discord: "", photo: "" };

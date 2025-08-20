@@ -1489,7 +1489,6 @@ function UsersPanel({ showToast }) {
 
 function PasswordResetPanel({ showToast }) {
   const [resets, setResets] = useState([]);
-  const [newPassword, setNewPassword] = useState({});
 
   async function refresh() {
     const q = query(collection(db, "password_resets"), where("status", "==", "pending"));
@@ -1505,23 +1504,13 @@ function PasswordResetPanel({ showToast }) {
     refresh();
   }, []);
 
-  const handlePasswordChange = (id, pass) => {
-    setNewPassword(prev => ({ ...prev, [id]: pass }));
-  }
-
   const handleUpdatePassword = async (reset) => {
-    const pass = newPassword[reset.id];
-    if (!pass || pass.length < 6) {
-      showToast("Password must be at least 6 characters.", "error");
-      return;
-    }
-    const success = await updateUserPassword(reset.email, pass);
+    const success = await updateUserPassword(reset.email);
     if (success) {
       const resetRef = doc(db, "password_resets", reset.id);
       await updateDoc(resetRef, { status: "completed" });
       refresh();
-      showToast(`Password for ${reset.email} has been updated.`, "success");
-      showToast(`New pass for ${reset.email}: ${pass}. Please send securely.`, 'info', 10000);
+      showToast(`Password reset email sent to ${reset.email}.`, "success");
     } else {
       showToast("Could not find a user with that email.", "error");
     }
@@ -1541,15 +1530,8 @@ function PasswordResetPanel({ showToast }) {
                 <p className="text-xs text-white/60">Requested on: {new Date(reset.createdAt.toDate()).toLocaleString()}</p>
               </div>
               <div className="flex items-center gap-2 w-full sm:w-auto">
-                <Input
-                  id={`new-pass-${reset.id}`}
-                  type="text"
-                  placeholder="Enter new password"
-                  value={newPassword[reset.id] || ''}
-                  onChange={e => handlePasswordChange(reset.id, e.target.value)}
-                />
                 <button onClick={() => handleUpdatePassword(reset)} className="rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-3 py-2 text-sm font-semibold transition-colors">
-                  Set
+                  Send Reset Email
                 </button>
               </div>
             </div>
