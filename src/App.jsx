@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import Papa from "papaparse";
-import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "./firebase";
-import { collection, getDocs, doc, updateDoc, addDoc, serverTimestamp, query, where } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, serverTimestamp, query, where } from "firebase/firestore";
 
 import {
-    ensureInit,
     getSession,
     loginAdmin,
     loginAffiliate,
@@ -22,9 +21,15 @@ import {
     listProducts,
     createTask,
     listTasksByUser,
-    listAllTasks,
     updateTask,
+    requestPasswordReset,
+    updateUserOnboarding,
+    updateUserProfile,
+    addProduct,
+    updateProduct,
 } from "./utils/auth";
+
+
 
 
 
@@ -149,15 +154,6 @@ const fmtDate = (iso) => {
     return "—";
   }
 };
-const lsget = (k, f) => {
-  try {
-    const v = JSON.parse(localStorage.getItem(k));
-    return v ?? f;
-  } catch {
-    return f;
-  }
-};
-const lssave = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 const toDTLocal = (iso) => {
   if (!iso) return "";
   try {
@@ -239,6 +235,7 @@ function sheetUrlToCsv(url) {
 const STATUS = ["Pending", "Video Submitted", "Ad Code Submitted", "Complete"];
 const LSK_PRODUCTS = "fyne_m_products_v2";
 const LSK_REQUESTS = "fyne_m_requests_v2";
+const ADMIN_USERNAME = "admin";
 
 
 
@@ -522,19 +519,19 @@ export default function App() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const { toast, showToast, showUndoToast, hideToast } = useToast();
-
-  const [session, setSessionState] = useState(null);
+  const [passwordResets, setPasswordResets] = useState([]);
+  const [session, setSession] = useState(null);
   const [me, setMe] = useState(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         const sessionData = { userId: user.uid, email: user.email, displayName: user.displayName, photoURL: user.photoURL };
-        setSessionState(sessionData);
+        setSession(sessionData);
         const currentUserData = await currentUser(sessionData);
         setMe(currentUserData);
       } else {
-        setSessionState(null);
+        setSession(null);
         setMe(null);
       }
       setLoading(false);
@@ -555,7 +552,7 @@ export default function App() {
       setLoading(false);
     }
     fetchData();
-  }, [me?.id]);
+  }, [me]);
 
   const counts = useMemo(() => {
     const by = Object.fromEntries(STATUS.map((s) => [s, 0]));
@@ -618,11 +615,10 @@ export default function App() {
                   setRequests={setRequests}
                   showToast={showToast}
                   me={me}
-                  setTab={setTab}
                 />
               ) : (
                 <AffiliateAuthPanel
-                  onAuthChange={() => setSessionState(getSession())}
+                  onAuthChange={() => setSession(getSession())}
                   showToast={showToast}
                   passwordResets={passwordResets}
                   setPasswordResets={setPasswordResets}
@@ -637,13 +633,12 @@ export default function App() {
                 passwordResets={passwordResets}
                 setPasswordResets={setPasswordResets}
                 counts={counts}
-                me={me}
                 onLogout={handleLogout}
                 showToast={showToast}
                 showUndoToast={showUndoToast}
               />
             ) : (
-              <AdminLogin onSuccess={() => setSessionState(getSession())} showToast={showToast} />
+              <AdminLogin onSuccess={() => setSession(getSession())} showToast={showToast} />
             )}
           </>
         )}
@@ -697,9 +692,9 @@ function AdminLogin({ onSuccess, showToast }) {
         setErr("Invalid username or password.");
         showToast("Login failed. Please check your credentials.", "error");
       }
-    } catch (error) {
-      setErr(error.message);
-      showToast("Login failed. Please check your credentials.", "error");
+    } catch {
+      setErr("An unexpected error occurred.");
+      showToast("An unexpected error occurred.", "error");
     }
   }
 
@@ -948,7 +943,7 @@ function OnboardingStep3({ onNext }) {
 /*************************
  * AFFILIATE EXPERIENCE
  *************************/
-function AffiliateScreen({ session, products, requests, setRequests, showToast, me, setTab }) {
+function AffiliateScreen({ session, products, requests, setRequests, showToast, me }) {
   const [affView, setAffView] = useState("products");
   const [profile, setProfile] = useState({ tiktok: "", discord: "", email: "", photo: "" });
   const [onboarding, setOnboarding] = useState({ completed: false });
@@ -956,7 +951,7 @@ function AffiliateScreen({ session, products, requests, setRequests, showToast, 
   
   useEffect(() => {
     if (me && isAffiliate(session)) setProfile((p) => ({ ...p, ...profileFromUser(me) }));
-  }, [me?.id, session]);
+  }, [me, session]);
 
   const [q, setQ] = useState("");
   const cats = useMemo(
@@ -1115,7 +1110,7 @@ function AffiliateScreen({ session, products, requests, setRequests, showToast, 
         </>
       )}
 
-      {affView === "profile" && <AffiliateProfilePage profile={profile} setProfile={setProfile} showToast={showToast} onLogout={() => { logout(); setSessionState(getSession()); }} me={me} />}
+      {affView === "profile" && <AffiliateProfilePage profile={profile} setProfile={setProfile} showToast={showToast} onLogout={() => { logout(); setSession(getSession()); }} me={me} />}
       {affView === "tasks" && <AffiliateTasksPage requests={requests} setRequests={setRequests} profile={profile} me={me} showToast={showToast} setAffView={setAffView} />}
       {affView === "stats" && <AffiliateStats requests={requests} profile={profile} me={me} />}
     </div>
@@ -1389,7 +1384,7 @@ function AffiliateStats({ requests, profile, me }) {
 /*************************
  * ADMIN
  *************************/
-function AdminScreen({ products, setProducts, requests, setRequests, counts, me, onLogout, showToast, showUndoToast }) {
+function AdminScreen({ products, setProducts, requests, setRequests, counts, onLogout, showToast, showUndoToast, passwordResets }) {
   const [view, setView] = useState("requests");
 
   const adminStats = useMemo(() => {
@@ -1425,7 +1420,7 @@ function AdminScreen({ products, setProducts, requests, setRequests, counts, me,
       </div>
 
       {view === "requests" && <RequestsPanel requests={requests} setRequests={setRequests} showToast={showToast} showUndoToast={showUndoToast} />}
-      {view === "products" && <ProductsPanel products={products} setProducts={setProducts} showToast={showToast} showUndoToast={showUndoToast} />}
+      {view === "products" && <ProductsPanel products={products} setProducts={setProducts} showToast={showToast} />}
       {view === "users" && <UsersPanel showToast={showToast} />}
       {view === "password_resets" && <PasswordResetPanel showToast={showToast} />}
     </div>
@@ -1623,7 +1618,7 @@ function RequestsPanel({ requests, setRequests, showToast, showUndoToast }) {
         // This is a mock undo, so we don't re-update the database
         showToast("Update reverted.", "info");
       });
-    } catch (error) {
+    } catch {
       setRequests(originalRequests);
       showToast("An error occurred while updating tasks.", "error");
     }
@@ -1827,7 +1822,7 @@ function BulkImportCard({ onImport, showToast }) {
   );
 }
 
-function ProductsPanel({ products, setProducts, showToast, showUndoToast }) {
+function ProductsPanel({ products, setProducts, showToast }) {
   const [editing, setEditing] = useState(null);
 
   async function refresh() {
@@ -1866,17 +1861,6 @@ function ProductsPanel({ products, setProducts, showToast, showUndoToast }) {
     await updateProduct(id, { active: !active, deletedAt: active ? serverTimestamp() : null });
     showToast(`Product ${active ? 'archived' : 'restored'}.`, 'info');
     refresh();
-  };
-
-  const downloadTemplate = () => {
-    const headers = "id,category,title,image,shareLink,contentDocUrl,productUrl,availabilityStart,availabilityEnd,commission,active";
-    const blob = new Blob([headers], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "fyne_products_template.csv";
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   return (

@@ -1,236 +1,97 @@
 // src/utils/auth.js
-
-import { getAuth, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { db } from '../firebase';
-import { collection, addDoc, getDocs, query, where, doc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
-
-function nowISO() { return new Date().toISOString(); }
-
-export const ADMIN_USERNAME = "admin@fyne.app";
-const ADMIN_PASSWORD = "admin123"; // This will only be used for initial admin seeding if needed, not for actual auth
-
-const auth = getAuth();
-
-/*************************
- * SESSION HELPERS
- *************************/
+import { auth, db } from "../firebase";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut, } from "firebase/auth";
+import { collection, doc, getDocs, addDoc, updateDoc, serverTimestamp, query, where, limit } from "firebase/firestore";
+// ---- session helpers
+const SESSION_KEY = "app_session";
+export function ensureInit() { return true; }
 export function getSession() {
-    const user = auth.currentUser;
-    if (user) {
-        return { userId: user.uid, email: user.email, role: "affiliate" }; // Simplified role for now
-    }
-    return null;
+    try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); }
+    catch { return null; }
 }
-
+export function isAdmin(s) { return !!s && s.role === "admin"; }
+export function isAffiliate(s) { return !!s && s.role === "affiliate"; }
+// ---- auth flows
+export async function loginAdmin(username, password) {
+    await signInWithEmailAndPassword(auth, username, password);
+    const session = { role: "admin", uid: auth.currentUser?.uid || null };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    return session;
+}
+export async function loginAffiliate(email, password) {
+    await signInWithEmailAndPassword(auth, email, password);
+    const session = { role: "affiliate", uid: auth.currentUser?.uid || null };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    return { ok: true, session };
+}
+export async function registerAffiliate({ email, password, displayName = "", tiktok = "", discord = "" }) {
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+    await addDoc(collection(db, "users"), {
+        uid: cred.user.uid, email, displayName, tiktok, discord, role: "affiliate", status: "pending", createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    });
+    return true;
+}
 export async function logout() {
     await signOut(auth);
-}
-
-export function isAdmin(s) {
-    const sess = s ?? getSession();
-    return !!sess && sess.email === ADMIN_USERNAME; // Simple check for admin based on email
-}
-
-export function isAffiliate(s) {
-    const sess = s ?? getSession();
-    return !!sess && sess.role === "affiliate";
-}
-
-export async function currentUser(s) {
-    const sess = s ?? getSession();
-    if (!sess) return null;
-    return await getUserById(sess.userId);
-}
-
-export async function loginAdmin(email, password) {
-    try {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
-        if (user.email === ADMIN_USERNAME) {
-            return { userId: user.uid, email: user.email, role: "admin" };
-        }
-        await signOut(auth);
-        return null;
-    } catch (error) {
-        console.error("Admin login error:", error);
-        return null;
-    }
-}
-
-/*************************
- * USERS
- *************************/
-async function getUserById(id) {
-    const userRef = doc(db, "users", id);
-    const userSnap = await getDoc(userRef);
-    if (userSnap.exists()) {
-        return { ...userSnap.data(), id: userSnap.id };
-    }
-    return null;
-}
-
-async function getUserByEmail(email) {
-    const q = query(collection(db, "users"), where("email", "==", email));
-    const querySnapshot = await getDocs(q);
-    if (!querySnapshot.empty) {
-        const userDoc = querySnapshot.docs[0];
-        return { ...userDoc.data(), id: userDoc.id };
-    }
-    return null;
-}
-
-export async function registerAffiliate({ email, password, displayName, tiktok = "", discord = "", photo = "" }) {
-    const exists = await getUserByEmail(email);
-    if (exists) return false;
-    const u = {
-        role: "affiliate",
-        status: "pending",
-        email,
-        password,
-        displayName: displayName || "",
-        createdAt: serverTimestamp(),
-        tiktok,
-        discord,
-        photo,
-    };
-    await addDoc(collection(db, "users"), u);
+    localStorage.removeItem(SESSION_KEY);
     return true;
 }
-
-export async function loginAffiliate(a, b) {
-    const email = typeof a === "object" ? a?.email : a;
-    const password = typeof a === "object" ? a?.password : b;
-    try {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
-        const userDoc = await getUserById(user.uid);
-        if (userDoc && userDoc.role === "affiliate" && userDoc.status === "approved") {
-            return { session: { userId: user.uid, email: user.email, role: "affiliate" } };
-        }
-        await signOut(auth);
-        return { error: "Account not approved or not an affiliate." };
-    } catch (error) {
-        console.error("Affiliate login error:", error);
-        return { error: error.message };
-    }
+// ---- profile + password
+export function profileFromUser(u) {
+    if (!u) return { email: "", name: "", tiktok: "", discord: "", photo: "" };
+    const email = u.email || u.user?.email || "";
+    const name = u.displayName || u.user?.displayName || u.name || "";
+    const photo = u.photoURL || u.user?.photoURL || "";
+    return { email, name, tiktok: u.tiktok || "", discord: u.discord || "", photo };
 }
-
-export async function listUsers() {
-    const q = query(collection(db, "users"), where("role", "==", "affiliate"));
-    const querySnapshot = await getDocs(q);
-    const users = [];
-    querySnapshot.forEach((doc) => {
-        users.push({ ...doc.data(), id: doc.id });
-    });
-    return users;
-}
-
-export async function updateUser(id, patch) {
-    const userRef = doc(db, "users", id);
-    await updateDoc(userRef, patch);
+export async function updateUserPassword(email) {
+    await sendPasswordResetEmail(auth, email);
     return true;
 }
-
-export function approveUser(id) { return updateUser(id, { status: "approved" }); }
-export function rejectUser(id) { return updateUser(id, { status: "rejected" }); }
-
-export function updateUserProfile(id, profile) {
-    return updateUser(id, profile);
+// ---- users
+export async function currentUser(session) {
+    const uid = session?.uid || auth.currentUser?.uid;
+    if (!uid) return null;
+    const q = query(collection(db, "users"), where("uid", "==", uid), limit(1));
+    const snap = await getDocs(q);
+    if (!snap.empty) return { id: uid, ...snap.docs[0].data(), email: snap.docs[0].data().email || "" };
+    return { id: uid, email: auth.currentUser?.email || "" };
 }
-
-export function updateUserOnboarding(id, onboarding) {
-    return updateUser(id, { onboarding });
+export async function listUsers(status) {
+    const ref = collection(db, "users");
+    const q = status ? query(ref, where("status", "==", status)) : ref;
+    const s = await getDocs(q);
+    return s.docs.map(d => ({ id: d.id, ...d.data() }));
 }
-
-export async function updateUserPassword(email, newPassword) {
-    const user = await getUserByEmail(email);
-    if (user) {
-        const userRef = doc(db, "users", user.id);
-        await updateDoc(userRef, { password: newPassword });
-        return true;
-    }
-    return false;
+export async function approveUser(userId) {
+    await updateDoc(doc(db, "users", userId), { status: "approved", updatedAt: serverTimestamp() });
+    return true;
 }
-
-export async function requestPasswordReset(email) {
-    const user = await getUserByEmail(email);
-    if (user) {
-        const resetRequest = {
-            email,
-            createdAt: serverTimestamp(),
-            status: "pending",
-        };
-        await addDoc(collection(db, "password_resets"), resetRequest);
-        return true;
-    }
-    return false;
+export async function rejectUser(userId) {
+    await updateDoc(doc(db, "users", userId), { status: "rejected", updatedAt: serverTimestamp() });
+    return true;
 }
-
-/*************************
- * PRODUCTS (utility-only)
- *************************/
+// ---- products
 export async function listProducts() {
-    const querySnapshot = await getDocs(collection(db, "products"));
-    const products = [];
-    querySnapshot.forEach((doc) => {
-        products.push({ ...doc.data(), id: doc.id });
-    });
-    return products;
+    const s = await getDocs(collection(db, "products"));
+    return s.docs.map(d => ({ id: d.id, ...d.data() }));
 }
-
-export async function addProduct(product) {
-    await addDoc(collection(db, "products"), product);
+// ---- tasks
+export async function createTask(entry) {
+    const payload = { ...entry, status: entry.status || "New", createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+    const ref = await addDoc(collection(db, "tasks"), payload);
+    return { id: ref.id, ...payload };
 }
-
-export async function updateProduct(id, patch) {
-    const productRef = doc(db, "products", id);
-    await updateDoc(productRef, patch);
-}
-
-/*************************
- * TASKS (utility-only)
- *************************/
-export async function createTask({ userId, productId }) {
-    const prod = await listProducts().find((p) => p.id === productId); // Await listProducts
-    const user = await getUserById(userId);
-    if (!prod || !user) return null;
-    const t = {
-        userId,
-        userEmail: user.email,
-        productId,
-        productTitle: prod.title,
-        productImage: prod.image,
-        status: "Pending",
-        videoLink: "",
-        adCode: "",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-    };
-    const docRef = await addDoc(collection(db, "tasks"), t);
-    return { ...t, id: docRef.id };
-}
-
 export async function listTasksByUser(userId) {
     const q = query(collection(db, "tasks"), where("userId", "==", userId));
-    const querySnapshot = await getDocs(q);
-    const tasks = [];
-    querySnapshot.forEach((doc) => {
-        tasks.push({ ...doc.data(), id: doc.id });
-    });
-    return tasks;
+    const s = await getDocs(q);
+    return s.docs.map(d => ({ id: d.id, ...d.data() }));
 }
-
 export async function listAllTasks() {
-    const querySnapshot = await getDocs(collection(db, "tasks"));
-    const tasks = [];
-    querySnapshot.forEach((doc) => {
-        tasks.push({ ...doc.data(), id: doc.id });
-    });
-    return tasks;
+    const s = await getDocs(collection(db, "tasks"));
+    return s.docs.map(d => ({ id: d.id, ...d.data() }));
 }
-
-export async function updateTask(id, patch) {
-    const taskRef = doc(db, "tasks", id);
-    await updateDoc(taskRef, { ...patch, updatedAt: serverTimestamp() });
+export async function updateTask(id, updates) {
+    await updateDoc(doc(db, "tasks", id), { ...updates, updatedAt: serverTimestamp() });
     return true;
 }
