@@ -1,7 +1,4 @@
-// src/utils/auth.js — localStorage demo store (backwards-compatible)
-
-export const ADMIN_USERNAME = "admin@fyne.app";
-const ADMIN_PASSWORD = "admin123";
+// src/utils/auth.js
 
 
 import { getAuth, signInWithEmailAndPassword, signOut } from "firebase/auth";
