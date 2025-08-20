@@ -1,23 +1,7 @@
-// src/components/ProductDetailsPage.jsx
-
 import React, { useMemo } from 'react';
-
-// You already created Card.jsx, so this import will work.
 import Card from './Card';
-
-// NOTE: You will need to create these components in their own files next!
-// For now, we will define them here to fix the current error.
-function QR({ url, size = 144, onClick }) {
-    if (!url) return null;
-    const src = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(url)}`;
-    return <img src={src} alt="QR Code" width={size} height={size} onClick={onClick} role={onClick ? "button" : undefined} className="rounded-xl border border-white/20 bg-white/10 p-2" />;
-}
-
-function Badge({ children, tone }) {
-    const m = { success: "border-emerald-400/30 bg-emerald-400/15 text-emerald-100", info: "border-sky-400/30 bg-sky-400/15 text-sky-100", default: "border-white/20 bg-white/10 text-white/80" };
-    const cx = (...c) => c.filter(Boolean).join(" ");
-    return <span className={cx("rounded-full border px-2 py-0.5 text-[11px] font-medium", m[tone] || m.default)}>{children}</span>;
-}
+import QR from './QR';
+import Badge from './Badge';
 
 // Helper function
 const fmtDate = (iso) => {

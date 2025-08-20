@@ -1,15 +1,33 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import Papa from "papaparse";
-import { auth } from "./firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
-import { db } from "./firebase";
-import { collection, getDocs, doc, updateDoc, query, where, getDoc, setDoc, addDoc, deleteDoc } from "firebase/firestore";
-import Auth from "./components/Auth";
-import ProductList from "./components/ProductList";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "./firebase";
+import { collection, getDocs, doc, updateDoc, addDoc, serverTimestamp, query, where } from "firebase/firestore";
 
-/*************************
- * PLACEHOLDER DEPENDENCIES
- *************************/
+import {
+    ensureInit,
+    getSession,
+    loginAdmin,
+    loginAffiliate,
+    registerAffiliate,
+    logout,
+    isAdmin,
+    isAffiliate,
+    currentUser,
+    listUsers,
+    approveUser,
+    rejectUser,
+    profileFromUser,
+    updateUserPassword,
+    listProducts,
+    createTask,
+    listTasksByUser,
+    listAllTasks,
+    updateTask,
+} from "./utils/auth";
+
+
+
 
 // Placeholder for "./components/ProfilePhotoPicker.jsx"
 const ProfilePhotoPicker = ({ value, onChange }) => {
@@ -52,12 +70,6 @@ const EyeIcon = ({ className = "w-5 h-5" }) => (
   </svg>
 );
 
-const UserPlusIcon = ({ className = "w-6 h-6" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.375 12.375 0 014 19.235z" />
-  </svg>
-);
-
 const EyeSlashIcon = ({ className = "w-5 h-5" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243l-4.243-4.243" />
@@ -79,12 +91,6 @@ const ExclamationCircleIcon = ({ className = "w-6 h-6" }) => (
 const XCircleIcon = ({ className = "w-6 h-6" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
-
-const NoSymbolIcon = ({ className = "w-5 h-5" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
   </svg>
 );
 
@@ -143,7 +149,15 @@ const fmtDate = (iso) => {
     return "—";
   }
 };
-
+const lsget = (k, f) => {
+  try {
+    const v = JSON.parse(localStorage.getItem(k));
+    return v ?? f;
+  } catch {
+    return f;
+  }
+};
+const lssave = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 const toDTLocal = (iso) => {
   if (!iso) return "";
   try {
@@ -183,12 +197,10 @@ function normalizeProductRow(r) {
     shareLink: (r.shareLink ?? DEMO_LINK).toString().trim(),
     contentDocUrl: (r.contentDocUrl ?? "").toString().trim(),
     productUrl: (r.productUrl ?? "").toString().trim(),
-    orderLink: (r.orderLink ?? "").toString().trim(),
     availabilityStart: toISOorNow(r.availabilityStart),
     availabilityEnd: toISOorNow(r.availabilityEnd),
     commission: (r.commission ?? "").toString().trim(),
     active: r.active !== undefined ? toBool(r.active) : true,
-    outOfStock: r.outOfStock !== undefined ? toBool(r.outOfStock) : false,
     createdAt: nowISO(),
     updatedAt: nowISO(),
     deletedAt: null,
@@ -224,12 +236,102 @@ function sheetUrlToCsv(url) {
 /*************************
  * CONSTANTS
  *************************/
-const STATUS = ["Pending", "Video Submitted", "Ad Code Submitted", "Complete", "Product Ordered"];
+const STATUS = ["Pending", "Video Submitted", "Ad Code Submitted", "Complete"];
+const LSK_PRODUCTS = "fyne_m_products_v2";
+const LSK_REQUESTS = "fyne_m_requests_v2";
+
+
 
 
 const DEMO_LINK = "https://affiliate-us.tiktok.com/api/v1/share/AJ45Xdql7Qyv";
 
+const SEED_PRODUCTS = [
+  {
+    id: "P001",
+    category: "Serums & Essences",
+    title: "FYNE Micro-Infusion Starter Kit",
+    image: "https://images.unsplash.com/photo-1611930022073-b7a4ba5fcccd?q=80&w=1200&auto=format&fit=crop",
+    shareLink: DEMO_LINK,
+    contentDocUrl: "https://docs.google.com/document/d/1ViralContentStrategyFYNE/view",
+    productUrl: "https://snif.co/",
+    availabilityStart: nowISO(),
+    availabilityEnd: new Date(Date.now() + 14 * 864e5).toISOString(),
+    commission: "25% per sale + $100/10hrs live (eligible)",
+    active: true,
+    createdAt: nowISO(),
+    updatedAt: nowISO(),
+    deletedAt: null,
+  },
+  {
+    id: "P002",
+    category: "Cleansers",
+    title: "FYNE Gentle Renewal Cleanser",
+    image: "https://images.unsplash.com/photo-1611930021588-4f74a0b6c0c1?q=80&w=1200&auto=format&fit=crop",
+    shareLink: DEMO_LINK,
+    contentDocUrl: "https://docs.google.com/document/d/1CreatorBriefCleanserFYNE/view",
+    productUrl: "https://snif.co/",
+    availabilityStart: nowISO(),
+    availabilityEnd: new Date(Date.now() + 7 * 864e5).toISOString(),
+    commission: "20% per sale",
+    active: true,
+    createdAt: nowISO(),
+    updatedAt: nowISO(),
+    deletedAt: null,
+  },
+  {
+    id: "P003",
+    category: "Moisturizers",
+    title: "FYNE Hydro-Glass Moisturizer",
+    image: "https://images.unsplash.com/photo-1585238342020-96629d9796d1?q=80&w=1200&auto=format&fit=crop",
+    shareLink: DEMO_LINK,
+    contentDocUrl: "https://docs.google.com/document/d/1HydroGlassBriefFYNE/view",
+    productUrl: "https://snif.co/",
+    availabilityStart: nowISO(),
+    availabilityEnd: new Date(Date.now() + 30 * 864e5).toISOString(),
+    commission: "25% per sale",
+    active: true,
+    createdAt: nowISO(),
+    updatedAt: nowISO(),
+    deletedAt: null,
+  },
+];
 
+const SEED_REQUESTS = [
+  {
+    id: "TASK_DEMO_1",
+    productId: "P001",
+    productTitle: "FYNE Micro-Infusion Starter Kit",
+    shareLink: DEMO_LINK,
+    status: "Complete",
+    createdAt: new Date(Date.now() - 5 * 864e5).toISOString(),
+    updatedAt: new Date(Date.now() - 2 * 864e5).toISOString(),
+    affiliateTikTok: "@testaffiliate",
+    affiliateDiscord: "test#1234",
+    affiliateEmail: "affiliate@fyne.app",
+    affiliateUserId: "user_affiliate_1",
+    videoLink: "https://tiktok.com/...",
+    adCode: "FYNE25",
+    sales: 1250.75,
+    commission: 312.68
+  },
+  {
+    id: "TASK_DEMO_2",
+    productId: "P002",
+    productTitle: "FYNE Gentle Renewal Cleanser",
+    shareLink: DEMO_LINK,
+    status: "Complete",
+    createdAt: new Date(Date.now() - 10 * 864e5).toISOString(),
+    updatedAt: new Date(Date.now() - 8 * 864e5).toISOString(),
+    affiliateTikTok: "@testaffiliate",
+    affiliateDiscord: "test#1234",
+    affiliateEmail: "affiliate@fyne.app",
+    affiliateUserId: "user_affiliate_1",
+    videoLink: "https://tiktok.com/...",
+    adCode: "CLEAN15",
+    sales: 850.50,
+    commission: 170.10
+  }
+];
 
 /*************************
  * UI PRIMITIVES & HOOKS
@@ -414,63 +516,48 @@ function EmptyState({ icon, title, message, actionText, onAction }) {
 /*************************
  * ROOT APP
  *************************/
-/*************************
- * ROOT APP
- *************************/
 export default function App() {
   const [tab, setTab] = useState("browse");
   const [products, setProducts] = useState([]);
   const [requests, setRequests] = useState([]);
-  const [passwordResets, setPasswordResets] = useState([]);
+  const [passwordResets, setPasswordResets] = useState(() => lsget(LSK_PASSWORD_RESETS, []));
   const [loading, setLoading] = useState(true);
   const { toast, showToast, showUndoToast, hideToast } = useToast();
-  const [user, setUser] = useState(null);
-  const [userRole, setUserRole] = useState(null);
+
+  const [session, setSessionState] = useState(() => getSession());
+  const me = useMemo(() => currentUser(session), [session]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        const userDocRef = doc(db, "users", currentUser.uid);
-        const docSnap = await getDoc(userDocRef);
-        if (docSnap.exists()) {
-          setUserRole(docSnap.data().role);
-        } else {
-          // If user document doesn't exist (e.g., old user or admin created directly in Auth),
-          // set a default role or handle as needed.
-          // For now, we'll assume non-existent user docs are affiliates.
-          setUserRole("affiliate");
-        }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // User is signed in, see docs for a list of available properties
+        // https://firebase.google.com/docs/reference/js/firebase.User
+        const { uid, email, displayName, photoURL } = user;
+        const session = { userId: uid, email, displayName, photoURL, role: 'affiliate' }; // Assuming all logged in users are affiliates for now
+        setSessionState(session);
       } else {
-        setUserRole(null);
+        // User is signed out
+        setSessionState(null);
       }
       setLoading(false);
     });
+
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    const fetchInitialData = async () => {
-      // Fetch products
-      const productsCollectionRef = collection(db, "products");
-      const productsData = await getDocs(productsCollectionRef);
-      setProducts(productsData.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
-
-      // Fetch requests
-      const requestsCollectionRef = collection(db, "requests");
-      const requestsData = await getDocs(requestsCollectionRef);
-      setRequests(requestsData.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
-
-      // Fetch password resets
-      const passwordResetsCollectionRef = collection(db, "passwordResets");
-      const passwordResetsData = await getDocs(passwordResetsCollectionRef);
-      setPasswordResets(passwordResetsData.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
-    };
-
-    if (!loading) {
-      fetchInitialData();
+    async function fetchData() {
+      setLoading(true);
+      const products = await listProducts();
+      setProducts(products);
+      if (me?.id) {
+        const tasks = await listTasksByUser(me.id);
+        setRequests(tasks);
+      }
+      setLoading(false);
     }
-  }, [loading]);
+    fetchData();
+  }, [me?.id]);
 
   const counts = useMemo(() => {
     const by = Object.fromEntries(STATUS.map((s) => [s, 0]));
@@ -478,14 +565,10 @@ export default function App() {
     return by;
   }, [requests]);
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      showToast("You have been logged out.", "info");
-    } catch (error) {
-      console.error("Error logging out:", error.message);
-      showToast("Error logging out.", "error");
-    }
+  const handleLogout = () => {
+    logout();
+    setSessionState(getSession());
+    showToast("You have been logged out.", "info");
   };
 
   return (
@@ -499,7 +582,7 @@ export default function App() {
             </div>
             <div>
               <div className="text-base font-semibold">Fyne Skincare Creator Hub</div>
-              <div className="text-xs text-white/60">Glassy • Mobile-first</div>
+              <div className="text-xs text-white/60">FREE SAMPLES</div>
             </div>
           </div>
           <div className="hidden sm:flex items-center gap-2">
@@ -512,17 +595,15 @@ export default function App() {
             >
               Affiliate
             </button>
-            {userRole === "admin" && (
-              <button
-                onClick={() => setTab("admin")}
-                className={cx(
-                  "px-3 py-1.5 rounded-lg text-sm border transition-colors",
-                  tab === "admin" ? "bg-white/20 border-white/30" : "bg-white/5 border-white/10 hover:bg-white/10"
-                )}
-              >
-                Admin
-              </button>
-            )}
+            <button
+              onClick={() => setTab("admin")}
+              className={cx(
+                "px-3 py-1.5 rounded-lg text-sm border transition-colors",
+                tab === "admin" ? "bg-white/20 border-white/30" : "bg-white/5 border-white/10 hover:bg-white/10"
+              )}
+            >
+              Admin
+            </button>
           </div>
         </div>
       </header>
@@ -531,34 +612,41 @@ export default function App() {
       <main className="mx-auto max-w-6xl px-3 pb-28 pt-6 sm:px-4">
         {loading ? <SkeletonLoader className="w-full h-64" /> : (
           <>
-            {user ? (
-              userRole === "admin" ? (
-                <AdminScreen
-                  products={products}
-                  setProducts={setProducts}
-                  requests={requests}
-                  setRequests={setRequests}
-                  passwordResets={passwordResets}
-                  setPasswordResets={setPasswordResets}
-                  counts={counts}
-                  onLogout={handleLogout}
-                  showToast={showToast}
-                  showUndoToast={showUndoToast}
-                />
-              ) : userRole === "affiliate" ? (
+            {tab === "browse" ? (
+              isAffiliate(session) ? (
                 <AffiliateScreen
+                  session={session}
                   products={products}
                   requests={requests}
                   setRequests={setRequests}
                   showToast={showToast}
+                  me={me}
                   setTab={setTab}
                 />
               ) : (
-                // Loading state or unauthorized message for users without a defined role yet
-                <div>Loading user data...</div>
+                <AffiliateAuthPanel
+                  onAuthChange={() => setSessionState(getSession())}
+                  showToast={showToast}
+                  passwordResets={passwordResets}
+                  setPasswordResets={setPasswordResets}
+                />
               )
+            ) : isAdmin(session) ? (
+              <AdminScreen
+                products={products}
+                setProducts={setProducts}
+                requests={requests}
+                setRequests={setRequests}
+                passwordResets={passwordResets}
+                setPasswordResets={setPasswordResets}
+                counts={counts}
+                me={me}
+                onLogout={handleLogout}
+                showToast={showToast}
+                showUndoToast={showUndoToast}
+              />
             ) : (
-              <Auth />
+              <AdminLogin onSuccess={() => setSessionState(getSession())} showToast={showToast} />
             )}
           </>
         )}
@@ -568,9 +656,7 @@ export default function App() {
       <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-slate-900/50 backdrop-blur-lg border-t border-white/10" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
         <div className="flex items-center justify-around p-2">
           <IconBtn active={tab === "browse"} label="Affiliate" icon={<UserGroupIcon />} onClick={() => setTab("browse")} />
-          {userRole === "admin" && (
-            <IconBtn active={tab === "admin"} label="Admin" icon={<BuildingStorefrontIcon />} onClick={() => setTab("admin")} />
-          )}
+          <IconBtn active={tab === "admin"} label="Admin" icon={<BuildingStorefrontIcon />} onClick={() => setTab("admin")} />
         </div>
       </nav>
 
@@ -578,6 +664,7 @@ export default function App() {
     </div>
   );
 }
+
 function IconBtn({ active, label, icon, onClick }) {
   return (
     <button
@@ -594,18 +681,177 @@ function IconBtn({ active, label, icon, onClick }) {
 }
 
 /*************************
+ * AUTH UI
+ *************************/
+function AdminLogin({ onSuccess, showToast }) {
+  const [username, setUsername] = useState(ADMIN_USERNAME);
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState("");
+
+  function submit(e) {
+    e.preventDefault();
+    const s = loginAdmin(username, password);
+    if (s) {
+      showToast("Admin login successful!", "success");
+      onSuccess?.();
+    } else {
+      setErr("Invalid username or password.");
+      showToast("Login failed. Please check your credentials.", "error");
+    }
+  }
+
+  return (
+    <Card className="p-6 max-w-md mx-auto">
+      <form onSubmit={submit} className="space-y-4">
+        <h2 className="text-lg font-semibold mb-2">Admin Login</h2>
+        <Input
+          id="admin-username"
+          label="Username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="admin@fyne.app"
+        />
+        <Input
+          id="admin-password"
+          label="Password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="••••••••"
+          error={err}
+          hint="Hint: admin123"
+        />
+        <button type="submit" className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">
+          Sign in
+        </button>
+      </form>
+    </Card>
+  );
+}
+
+function AffiliateAuthPanel({ onAuthChange, showToast }) {
+  const [mode, setMode] = useState("login"); // login | register | forgot
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [tiktok, setTikTok] = useState("");
+  const [discord, setDiscord] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [err, setErr] = useState({});
+
+  function validate(fields) {
+    const newErrors = {};
+    if (fields.includes('email') && !email) newErrors.email = "Email is required.";
+    else if (fields.includes('email') && !/\S+@\S+\.\S+/.test(email)) newErrors.email = "Email is invalid.";
+
+    if (fields.includes('password') && !password) newErrors.password = "Password is required.";
+    else if (fields.includes('password') && password.length < 6) newErrors.password = "Password must be at least 6 characters.";
+
+    if (fields.includes('displayName') && !displayName) newErrors.displayName = "Display name is required.";
+    if (fields.includes('tiktok') && !tiktok) newErrors.tiktok = "TikTok username is required.";
+    if (fields.includes('discord') && !discord) newErrors.discord = "Discord username is required.";
+
+    setErr(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }
+
+  function doLogin(e) {
+    e.preventDefault();
+    if (!validate(['email', 'password'])) return;
+
+    const result = loginAffiliate(email, password);
+    if (result.session) {
+      showToast("Welcome back!", "success");
+      onAuthChange?.();
+    } else {
+      setErr({ form: result.error || "An unknown login error occurred." });
+    }
+  }
+
+  function doRegister(e) {
+    e.preventDefault();
+    if (!validate(['displayName', 'email', 'password', 'tiktok', 'discord'])) return;
+
+    try {
+      const ok = registerAffiliate({ email, password, displayName, tiktok, discord });
+      if (!ok) {
+        setErr({ form: "An account with this email already exists." });
+        return;
+      }
+      showToast("Registration successful! Your account is pending admin approval.", "success");
+      setErr({});
+      setMode("login");
+    } catch (e) {
+      setErr({ form: e.message });
+    }
+  }
+
+  async function doForgotPassword(e) {
+    e.preventDefault();
+    if (!validate(['email'])) return;
+
+    const success = await requestPasswordReset(email);
+    if (success) {
+      showToast("Password reset request sent. An admin will contact you.", "success");
+      setMode("login");
+    } else {
+      setErr({ form: "Could not find a user with that email." });
+    }
+  }
+
+  return (
+    <Card className="p-6 max-w-md mx-auto">
+      <div className="flex gap-2 mb-4 border-b border-white/10 pb-4">
+        <button onClick={() => { setMode("login"); setErr({}); }} className={cx("flex-1 rounded-lg border px-3 py-2 text-sm transition-colors", mode === "login" ? "bg-white/20 border-white/30" : "bg-white/5 border-white/10")}>Login</button>
+        <button onClick={() => { setMode("register"); setErr({}); }} className={cx("flex-1 rounded-lg border px-3 py-2 text-sm transition-colors", mode === "register" ? "bg-white/20 border-white/30" : "bg-white/5 border-white/10")}>Register</button>
+      </div>
+
+      {err.form && <div className="bg-rose-500/20 text-rose-200 text-sm rounded-lg p-3 mb-4">{err.form}</div>}
+
+      {mode === "login" && (
+        <form onSubmit={doLogin} className="space-y-4">
+          <Input id="login-email" label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" error={err.email} required />
+          <Input id="login-password" label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" error={err.password} required />
+          <button type="submit" className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">Sign in</button>
+          <div className="text-center">
+            <button type="button" onClick={() => setMode('forgot')} className="text-xs text-sky-300 hover:underline">Forgot Password?</button>
+          </div>
+        </form>
+      )}
+
+      {mode === "register" && (
+        <form onSubmit={doRegister} className="space-y-4">
+          <Input id="reg-name" label="Display Name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Your Name" error={err.displayName} required />
+          <Input id="reg-email" label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" error={err.email} required />
+          <Input id="reg-tiktok" label="TikTok Username" value={tiktok} onChange={(e) => setTikTok(e.target.value)} placeholder="@yourtiktok" error={err.tiktok} required />
+          <Input id="reg-discord" label="Discord Username" value={discord} onChange={(e) => setDiscord(e.target.value)} placeholder="your_discord#1234" error={err.discord} required />
+          <Input id="reg-password" label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" error={err.password} hint="Minimum 6 characters." required />
+          <button type="submit" className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">Create Account</button>
+          <p className="text-xs text-white/60 text-center">After registration, an admin must approve your account.</p>
+        </form>
+      )}
+
+      {mode === "forgot" && (
+        <form onSubmit={doForgotPassword} className="space-y-4">
+          <h3 className="font-semibold">Request Password Reset</h3>
+          <p className="text-sm text-white/70">Enter your account email. An admin will be notified to help you reset your password.</p>
+          <Input id="forgot-email" label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" error={err.email} required />
+          <button type="submit" className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-3 text-sm font-semibold transition-colors">Send Request</button>
+        </form>
+      )}
+    </Card>
+  );
+}
+
+/*************************
  * AFFILIATE ONBOARDING
  *************************/
-function AffiliateOnboarding({ profile, setProfile, onFinish }) {
+function AffiliateOnboarding({ profile, setProfile, onFinish, me }) {
   const [step, setStep] = useState(1);
 
   const nextStep = () => setStep(s => s + 1);
 
   const finishOnboarding = async () => {
-    if (auth.currentUser) {
-      const userDocRef = doc(db, "users", auth.currentUser.uid);
-      await updateDoc(userDocRef, { onboardingCompleted: true });
-    }
+    await updateUserOnboarding(me.id, { completed: true });
     onFinish();
   };
 
@@ -641,21 +887,13 @@ function AffiliateOnboarding({ profile, setProfile, onFinish }) {
 function OnboardingStep1({ profile, setProfile, onNext }) {
   const [errors, setErrors] = useState({});
 
-  const handleNext = async () => {
+  const handleNext = () => {
     const newErrors = {};
     if (!profile.tiktok) newErrors.tiktok = "TikTok username is required.";
     if (!profile.discord) newErrors.discord = "Discord username is required.";
     if (!profile.email) newErrors.email = "Email is required.";
     setErrors(newErrors);
     if (Object.keys(newErrors).length === 0) {
-      if (auth.currentUser) {
-        const userDocRef = doc(db, "users", auth.currentUser.uid);
-        await updateDoc(userDocRef, {
-          tiktok: profile.tiktok,
-          discord: profile.discord,
-          email: profile.email,
-        });
-      }
       onNext();
     }
   };
@@ -707,109 +945,183 @@ function OnboardingStep3({ onNext }) {
 /*************************
  * AFFILIATE EXPERIENCE
  *************************/
-  function AffiliateScreen({ products, requests, setRequests, showToast, setTab }) {
+function AffiliateScreen({ session, products, requests, setRequests, showToast, me, setTab }) {
   const [affView, setAffView] = useState("products");
   const [profile, setProfile] = useState({ tiktok: "", discord: "", email: "", photo: "" });
-  const [onboardingCompleted, setOnboardingCompleted] = useState(true);
+  const [onboarding, setOnboarding] = useState({ completed: false });
 
+  
   useEffect(() => {
-    const fetchProfileAndTasks = async () => {
-      if (auth.currentUser) {
-        const userDocRef = doc(db, "users", auth.currentUser.uid);
-        const docSnap = await getDoc(userDocRef);
-        if (docSnap.exists()) {
-          const userData = docSnap.data();
-          setProfile(userData);
-          setOnboardingCompleted(userData.onboardingCompleted || false);
-        } else {
-          await setDoc(userDocRef, {
-            email: auth.currentUser.email,
-            uid: auth.currentUser.uid,
-            role: "affiliate",
-            onboardingCompleted: false,
-          });
-          setProfile({ email: auth.currentUser.email, uid: auth.currentUser.uid, role: "affiliate" });
-          setOnboardingCompleted(false);
+    if (me && isAffiliate(session)) setProfile((p) => ({ ...p, ...profileFromUser(me) }));
+  }, [me?.id, session]);
+
+  const [q, setQ] = useState("");
+  const cats = useMemo(
+    () => ["All", ...Array.from(new Set(products.filter((p) => p.active && !p.deletedAt).map((p) => p.category)))],
+    [products]
+  );
+  const [cat, setCat] = useState("All");
+  const [sort, setSort] = useState("newest");
+  const [sel, setSel] = useState(null);
+
+  const myTaskByProduct = useMemo(() => {
+    const keyMatch = (t) =>
+      (profile.email && t.affiliateEmail === profile.email) ||
+      (profile.tiktok && t.affiliateTikTok === profile.tiktok) ||
+      (me?.id && t.affiliateUserId === me.id);
+    const map = {};
+    requests.forEach((t) => {
+      if (keyMatch(t)) {
+        if (!map[t.productId] || new Date(t.createdAt) > new Date(map[t.productId].createdAt)) {
+          map[t.productId] = t;
         }
-
-        // Fetch tasks for the current user
-        const tasksCollectionRef = collection(db, "requests");
-        const q = query(tasksCollectionRef, where("affiliateUserId", "==", auth.currentUser.uid));
-        const tasksData = await getDocs(q);
-        setRequests(tasksData.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
       }
-    };
-    fetchProfileAndTasks();
-  }, [auth.currentUser]);
+    });
+    return map;
+  }, [requests, profile, me?.id]);
 
-  useEffect(() => {
-    // Save profile changes to Firestore
-    const saveProfile = async () => {
-      if (auth.currentUser && profile.email) { // Ensure profile is not empty and user is logged in
-        const userDocRef = doc(db, "users", auth.currentUser.uid);
-        await updateDoc(userDocRef, profile);
-      }
-    };
-    saveProfile();
-  }, [profile]);
+  const visibleProducts = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    let arr = products
+      .filter((p) => p.active && !p.deletedAt)
+      .filter((p) => (cat === "All" ? true : p.category === cat))
+      .filter((p) => (t ? p.title.toLowerCase().includes(t) || p.category.toLowerCase().includes(t) : true))
+      .filter((p) => !myTaskByProduct[p.id] || myTaskByProduct[p.id]?.status === 'Complete'); // Show if no task or task is complete
+    arr.sort((a, b) => (sort === "newest" ? new Date(b.createdAt) - new Date(a.createdAt) : new Date(a.createdAt) - new Date(b.createdAt)));
+    return arr;
+  }, [products, q, cat, myTaskByProduct, sort]);
 
   const handleCreateTask = async (product) => {
-    if (!auth.currentUser) {
-      showToast("Please log in to create a task.", "error");
+    const ok = profile?.tiktok && profile?.discord && profile?.email;
+    if (!ok) {
+      showToast("Please complete your TikTok, Discord, and Email in your profile first.", "error");
+      setAffView('profile');
       return;
     }
-    const newTask = {
+    const exists = requests.find(
+      (t) => t.productId === product.id && t.affiliateEmail === profile.email && t.status !== "Complete"
+    );
+    if (exists) {
+      showToast("You already have an open task for this product.", "error");
+      // Still open the link even if task exists
+      window.open(product.shareLink, "_blank", "noopener,noreferrer");
+      return;
+    }
+    const entry = {
       productId: product.id,
       productTitle: product.title,
       shareLink: product.shareLink,
-      status: "Pending",
-      createdAt: nowISO(),
-      updatedAt: nowISO(),
-      affiliateEmail: auth.currentUser.email,
-      affiliateUserId: auth.currentUser.uid,
-      videoLink: "",
-      adCode: "",
+      affiliateTikTok: profile.tiktok,
+      affiliateDiscord: profile.discord,
+      affiliateEmail: profile.email,
+      affiliateUserId: me?.id || null,
     };
-    try {
-      const docRef = await addDoc(collection(db, "requests"), newTask);
-      setRequests(prev => [...prev, { ...newTask, id: docRef.id }]);
-      showToast(`Task created for ${product.title}!`, "success");
-    } catch (error) {
-      console.error("Error adding document: ", error);
-      showToast("Failed to create task.", "error");
-    }
+    const newTask = await createTask(entry);
+    setRequests(prev => [newTask, ...prev]);
+    showToast(`Task for "${product.title}" created!`, "success");
+    window.open(product.shareLink, "_blank", "noopener,noreferrer");
+    setSel(null); // Close details page
   };
+
+  if (!onboarding.completed) {
+    return <AffiliateOnboarding profile={profile} setProfile={setProfile} onFinish={() => setOnboarding({ completed: true })} me={me} />
+  }
 
   return (
     <div className="flex flex-col gap-4">
-      {onboardingCompleted ? (
-        <div className="grid grid-cols-1 gap-4">
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => setAffView("products")} className={cx("rounded-lg border px-3 py-2 text-sm", affView === "products" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Products</button>
-            <button onClick={() => setAffView("tasks")} className={cx("rounded-lg border px-3 py-2 text-sm", affView === "tasks" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>My Tasks</button>
-            <button onClick={() => setAffView("stats")} className={cx("rounded-lg border px-3 py-2 text-sm", affView === "stats" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Stats</button>
-            <button onClick={() => setAffView("profile")} className={cx("rounded-lg border px-3 py-2 text-sm", affView === "profile" ? "bg-white/30 border-white/40" : "bg-white/10 border-white/20")}>Profile</button>
+      {/* Sticky Subnav */}
+      <div className="sticky top-[61px] z-10 backdrop-blur-lg bg-slate-900/60 -mx-4 px-4 py-2 border-b border-white/10">
+        <div className="mx-auto max-w-6xl">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {[
+              ["products", "Products", <BuildingStorefrontIcon className="w-5 h-5" />],
+              ["tasks", "My Tasks", <ClipboardDocumentListIcon className="w-5 h-5" />],
+              ["profile", "Profile", <UserCircleIcon className="w-5 h-5" />],
+              ["stats", "Stats", <ChartBarIcon className="w-5 h-5" />],
+            ].map(([k, label, icon]) => (
+              <button
+                key={k}
+                onClick={() => setAffView(k)}
+                className={cx(
+                  "flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
+                  affView === k ? "bg-white/20 border-white/30" : "bg-white/5 border-white/10 hover:bg-white/10"
+                )}
+              >
+                {icon} {label}
+              </button>
+            ))}
           </div>
-
-          {affView === "products" && <ProductList products={products} onCreateTask={handleCreateTask} requests={requests} />}
-          {affView === "tasks" && <AffiliateTasksPage requests={requests} setRequests={setRequests} profile={profile} showToast={showToast} setAffView={setAffView} products={products} />}
-          {affView === "stats" && <AffiliateStats requests={requests} profile={profile} />}
-          {affView === "profile" && <AffiliateProfilePage profile={profile} setProfile={setProfile} showToast={showToast} onLogout={() => signOut(auth)} />}
         </div>
-      ) : (
-        <AffiliateOnboarding profile={profile} setProfile={setProfile} onFinish={() => setOnboardingCompleted(true)} />
+      </div>
+
+      {/* Pages */}
+      {affView === "products" && (
+        <>
+          <Card className="p-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <select value={cat} onChange={(e) => setCat(e.target.value)} className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2.5 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products…" className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              <select value={sort} onChange={(e) => setSort(e.target.value)} className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2.5 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+              </select>
+            </div>
+          </Card>
+
+          {sel ? (
+            <ProductDetailsPage
+              product={sel}
+              onBack={() => setSel(null)}
+              onCreateTask={handleCreateTask}
+              myTask={myTaskByProduct[sel.id]}
+            />
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {visibleProducts.map((p) => {
+                const myTask = myTaskByProduct[p.id];
+                return (
+                  <Card key={p.id} className="overflow-hidden group" onClick={() => setSel(p)}>
+                    <div className="aspect-[4/3] w-full overflow-hidden relative">
+                      <img src={p.image} alt={p.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                      <div className="absolute top-2 right-2 flex flex-col gap-1">
+                        {myTask?.status === "Complete" && <Badge tone="success">Completed</Badge>}
+                        {myTask && myTask.status !== "Complete" && <Badge tone="info">Task Open</Badge>}
+                      </div>
+                    </div>
+                    <div className="p-3 flex flex-col gap-2">
+                      <h3 className="font-semibold leading-tight truncate" title={p.title}>{p.title}</h3>
+                      <p className="text-xs text-white/70">{p.category}</p>
+                      <div className="mt-1 text-[11px] rounded-full border border-white/20 bg-white/10 px-2 py-0.5 self-start">{p.commission}</div>
+                    </div>
+                  </Card>
+                );
+              })}
+              {!visibleProducts.length && (
+                <div className="col-span-full">
+                  <EmptyState
+                    icon={<BuildingStorefrontIcon className="w-full h-full" />}
+                    title="No Products Found"
+                    message="There are no products matching your current filters. Try a different search or check back soon!"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
+
+      {affView === "profile" && <AffiliateProfilePage profile={profile} setProfile={setProfile} showToast={showToast} onLogout={() => { logout(); setSessionState(getSession()); }} me={me} />}
+      {affView === "tasks" && <AffiliateTasksPage requests={requests} setRequests={setRequests} profile={profile} me={me} showToast={showToast} setAffView={setAffView} />}
+      {affView === "stats" && <AffiliateStats requests={requests} profile={profile} me={me} />}
     </div>
   );
 }
 
-function AffiliateProfilePage({ profile, setProfile, showToast, onLogout }) {
+function AffiliateProfilePage({ profile, setProfile, showToast, onLogout, me }) {
   const [localProfile, setLocalProfile] = useState(profile);
   const [errors, setErrors] = useState({});
-
-  useEffect(() => {
-    setLocalProfile(profile);
-  }, [profile]);
 
   const onPhotoChange = (dataUrl) => {
     setLocalProfile(prev => ({ ...prev, photo: dataUrl }));
@@ -823,12 +1135,9 @@ function AffiliateProfilePage({ profile, setProfile, showToast, onLogout }) {
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length === 0) {
-      if (auth.currentUser) {
-        const userDocRef = doc(db, "users", auth.currentUser.uid);
-        await updateDoc(userDocRef, localProfile);
-        setProfile(localProfile); // Update parent state after successful save
-        showToast("Profile updated successfully!", "success");
-      }
+      await updateUserProfile(me.id, localProfile);
+      setProfile(localProfile);
+      showToast("Profile updated successfully!", "success");
     } else {
       showToast("Please fill out all required fields.", "error");
     }
@@ -883,7 +1192,6 @@ function ProductDetailsPage({ product, onBack, onCreateTask, myTask }) {
               <Badge>{product.category}</Badge>
               <Badge>{product.commission}</Badge>
               {inWindow ? <Badge tone="success">Available now</Badge> : <Badge tone="warn">Out of window</Badge>}
-              {product.outOfStock && <Badge tone="error">Out of Stock</Badge>}
             </div>
             <div className="text-sm text-white/80">
               Available: {fmtDate(product.availabilityStart)} → {fmtDate(product.availabilityEnd)}
@@ -926,44 +1234,23 @@ function ProductDetailsPage({ product, onBack, onCreateTask, myTask }) {
   );
 }
 
-function AffiliateTasksPage({ requests, setRequests, profile, showToast, setAffView, products }) {
+function AffiliateTasksPage({ requests, setRequests, profile, me, showToast, setAffView }) {
   const mine = useMemo(() => {
-    const currentUserEmail = auth.currentUser?.email;
-    const currentUserId = auth.currentUser?.uid;
-    return requests.filter(t => (
+    const isMine = (t) =>
       (profile.email && t.affiliateEmail === profile.email) ||
       (profile.tiktok && t.affiliateTikTok === profile.tiktok) ||
-      (currentUserId && t.affiliateUserId === currentUserId) ||
-      (currentUserEmail && t.affiliateEmail === currentUserEmail)
-    )).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [requests, profile]);
+      (me?.id && t.affiliateUserId === me.id);
+    return requests.filter(isMine).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [requests, profile, me?.id]);
 
-  const [localTasks, setLocalTasks] = useState({});
-
-  useEffect(() => {
-    const initial = {};
-    mine.forEach(task => {
-      initial[task.id] = { videoLink: task.videoLink || '', adCode: task.adCode || '' };
-    });
-    setLocalTasks(initial);
-  }, [mine]); // Depend on mine, not requests, profile, me?.id
-
-  const handleInputChange = (id, field, value) => {
-    setLocalTasks(prev => ({
-      ...prev,
-      [id]: { ...prev[id], [field]: value }
-    }));
-  };
-
-  const handleSubmit = async (id) => {
-    const taskData = localTasks[id];
-    if (!taskData.videoLink || !taskData.adCode) {
+  const handleSubmit = async (id, videoLink, adCode) => {
+    if (!videoLink || !adCode) {
       showToast("Please provide both the TikTok video link and the ad code.", "error");
       return;
     }
-    const taskDocRef = doc(db, "tasks", id);
-    await updateDoc(taskDocRef, { ...taskData, status: "Video Submitted", updatedAt: nowISO() });
-    setRequests(prev => prev.map(r => r.id === id ? { ...r, ...taskData, status: "Video Submitted", updatedAt: nowISO() } : r));
+    await updateTask(id, { videoLink, adCode, status: "Video Submitted" });
+    const updatedRequests = requests.map((r) => (r.id === id ? { ...r, videoLink, adCode, status: "Video Submitted" } : r));
+    setRequests(updatedRequests);
     showToast("Task submitted for review!", "success");
   };
 
@@ -972,10 +1259,11 @@ function AffiliateTasksPage({ requests, setRequests, profile, showToast, setAffV
       <h2 className="text-lg font-semibold mb-4">My Tasks</h2>
       <div className="grid grid-cols-1 gap-4">
         {mine.map((r) => {
-          const product = products.find(p => p.id === r.productId);
-          const localData = localTasks[r.id] || { videoLink: '', adCode: '' };
           const isComplete = r.status === 'Complete';
           const isPendingInput = r.status === 'Pending';
+          let videoLink = r.videoLink || "";
+          let adCode = r.adCode || "";
+
           return (
             <div key={r.id} className="rounded-xl border border-white/15 bg-white/5 p-4 space-y-3">
               <div className="flex items-start justify-between gap-3">
@@ -983,25 +1271,23 @@ function AffiliateTasksPage({ requests, setRequests, profile, showToast, setAffV
                   <div className="font-semibold truncate" title={r.productTitle}>{r.productTitle}</div>
                   <div className="text-xs text-white/60">Requested: {new Date(r.createdAt).toLocaleDateString()}</div>
                 </div>
-                <Badge tone={isComplete ? 'success' : r.status === 'Product Ordered' ? 'info' : 'default'}>{r.status}</Badge>
+                <Badge tone={isComplete ? 'success' : 'info'}>{r.status}</Badge>
               </div>
-
-              {product?.outOfStock && <p className="text-sm text-rose-300 text-center font-medium">This product is currently out of stock.</p>}
 
               <div className="space-y-3">
                 <Input
                   id={`video-${r.id}`}
                   label="TikTok Video Link"
-                  value={localData.videoLink}
-                  onChange={(e) => handleInputChange(r.id, 'videoLink', e.target.value)}
+                  value={videoLink}
+                  onChange={(e) => (videoLink = e.target.value)}
                   placeholder="https://www.tiktok.com/..."
                   disabled={!isPendingInput}
                 />
                 <Input
                   id={`adcode-${r.id}`}
                   label="Ad Code"
-                  value={localData.adCode}
-                  onChange={(e) => handleInputChange(r.id, 'adCode', e.target.value)}
+                  value={adCode}
+                  onChange={(e) => (adCode = e.target.value)}
                   placeholder="e.g., TIKTOKAD123"
                   disabled={!isPendingInput}
                 />
@@ -1009,15 +1295,14 @@ function AffiliateTasksPage({ requests, setRequests, profile, showToast, setAffV
 
               {isPendingInput && (
                 <button
-                  onClick={() => handleSubmit(r.id)}
+                  onClick={() => handleSubmit(r.id, videoLink, adCode)}
                   className="w-full rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-4 py-2.5 text-sm font-semibold transition-colors"
                 >
                   Submit for Review
                 </button>
               )}
               {isComplete && <p className="text-sm text-emerald-300 text-center font-medium">🎉 This task is complete. Great job!</p>}
-              {!isPendingInput && !isComplete && r.status !== 'Product Ordered' && <p className="text-sm text-sky-300 text-center font-medium">This task is currently under review by an admin.</p>}
-              {r.status === 'Product Ordered' && <p className="text-sm text-sky-300 text-center font-medium">Your requested product has been ordered and is on its way.</p>}
+              {!isPendingInput && !isComplete && <p className="text-sm text-sky-300 text-center font-medium">This task is currently under review by an admin.</p>}
             </div>
           )
         })}
@@ -1035,20 +1320,19 @@ function AffiliateTasksPage({ requests, setRequests, profile, showToast, setAffV
   );
 }
 
-function AffiliateStats({ requests, profile }) {
+function AffiliateStats({ requests, profile, me }) {
   const mine = useMemo(() => {
-    const currentUserEmail = auth.currentUser?.email;
-    const currentUserId = auth.currentUser?.uid;
-    return requests.filter(t => (
+    const isMine = (t) =>
       (profile.email && t.affiliateEmail === profile.email) ||
       (profile.tiktok && t.affiliateTikTok === profile.tiktok) ||
-      (currentUserId && t.affiliateUserId === currentUserId) ||
-      (currentUserEmail && t.affiliateEmail === currentUserEmail)
-    ));
-  }, [requests, profile]);
+      (me?.id && t.affiliateUserId === me.id);
+    return requests.filter(isMine);
+  }, [requests, profile, me?.id]);
 
   const totals = useMemo(() => {
     const completedTasks = mine.filter(t => t.status === 'Complete');
+    const totalSales = completedTasks.reduce((sum, task) => sum + (task.sales || 0), 0);
+    const totalCommission = completedTasks.reduce((sum, task) => sum + (task.commission || 0), 0);
 
     const perDay = {};
     mine.forEach((t) => {
@@ -1067,6 +1351,8 @@ function AffiliateStats({ requests, profile }) {
     return {
       requested: mine.length,
       completed: completedTasks.length,
+      totalSales,
+      totalCommission,
       series,
       max
     };
@@ -1074,9 +1360,11 @@ function AffiliateStats({ requests, profile }) {
 
   return (
     <Card className="p-4">
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Stat label="Tasks Created" value={totals.requested} />
         <Stat label="Tasks Completed" value={totals.completed} />
+        <Stat label="Total Sales" value={`$${totals.totalSales.toFixed(2)}`} />
+        <Stat label="Total Commission" value={`$${totals.totalCommission.toFixed(2)}`} />
       </div>
       <h3 className="text-sm font-semibold mb-2">My Activity (last 14 days)</h3>
       <div className="grid grid-cols-14 gap-1.5 h-32 items-end border-b border-white/10 pb-2">
@@ -1098,25 +1386,23 @@ function AffiliateStats({ requests, profile }) {
 /*************************
  * ADMIN
  *************************/
-function AdminScreen({ products, setProducts, requests, setRequests, passwordResets, setPasswordResets, counts, onLogout, showToast, showUndoToast }) {
+function AdminScreen({ products, setProducts, requests, setRequests, passwordResets, setPasswordResets, counts, me, onLogout, showToast, showUndoToast }) {
   const [view, setView] = useState("requests");
-  const [selectedRequest, setSelectedRequest] = useState(null);
 
-  const handleOrderClick = (request) => {
-    setSelectedRequest(request);
-  };
-
-  const handleCloseOrderPage = () => {
-    setSelectedRequest(null);
-  };
+  const adminStats = useMemo(() => {
+    const completedTasks = requests.filter(r => r.status === 'Complete');
+    const totalSales = completedTasks.reduce((sum, task) => sum + (task.sales || 0), 0);
+    const totalCommission = completedTasks.reduce((sum, task) => sum + (task.commission || 0), 0);
+    return { totalSales, totalCommission };
+  }, [requests]);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Stat label="Active Products" value={products.filter((p) => p.active && !p.deletedAt).length} />
-        <Stat label="Pending Tasks" value={counts["Pending"] || 0} />
         <Stat label="Tasks to Review" value={counts["Video Submitted"] || 0} />
-        <Stat label="Completed Tasks" value={counts["Complete"] || 0} />
+        <Stat label="Total Affiliate Sales" value={`$${adminStats.totalSales.toFixed(2)}`} />
+        <Stat label="Total Commission Paid" value={`$${adminStats.totalCommission.toFixed(2)}`} />
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -1135,11 +1421,10 @@ function AdminScreen({ products, setProducts, requests, setRequests, passwordRes
         <button onClick={onLogout} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm">Logout</button>
       </div>
 
-      {view === "requests" && <RequestsPanel requests={requests} setRequests={setRequests} showToast={showToast} showUndoToast={showUndoToast} onOrder={handleOrderClick} products={products} setProducts={setProducts} />}
+      {view === "requests" && <RequestsPanel requests={requests} setRequests={setRequests} showToast={showToast} showUndoToast={showUndoToast} />}
       {view === "products" && <ProductsPanel products={products} setProducts={setProducts} showToast={showToast} showUndoToast={showUndoToast} />}
       {view === "users" && <UsersPanel showToast={showToast} />}
       {view === "password_resets" && <PasswordResetPanel resets={passwordResets} setResets={setPasswordResets} showToast={showToast} />}
-      {selectedRequest && <OrderPage request={selectedRequest} onClose={handleCloseOrderPage} products={products} />}
     </div>
   );
 }
@@ -1156,44 +1441,26 @@ function Stat({ label, value }) {
 function UsersPanel({ showToast }) {
   const [users, setUsers] = useState([]);
 
-  const fetchUsers = async () => {
-    const usersCollectionRef = collection(db, "users");
-    const q = query(usersCollectionRef, where("role", "==", "affiliate"));
-    const data = await getDocs(q);
-    setUsers(data.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
-  };
+  async function refresh() {
+    const userList = await listUsers();
+    setUsers(userList);
+  }
 
   useEffect(() => {
-    fetchUsers();
+    refresh();
   }, []);
 
   const handleApprove = async (id, name) => {
-    const userDocRef = doc(db, "users", id);
-    await updateDoc(userDocRef, { status: "approved" });
-    fetchUsers();
+    await approveUser(id);
+    refresh();
     showToast(`${name}'s account has been approved.`, 'success');
-  };
+  }
 
   const handleReject = async (id, name) => {
-    const userDocRef = doc(db, "users", id);
-    await updateDoc(userDocRef, { status: "rejected" });
-    fetchUsers();
+    await rejectUser(id);
+    refresh();
     showToast(`${name}'s account has been rejected.`, 'info');
-  };
-
-  const handleBanUser = async (id, name) => {
-    const userDocRef = doc(db, "users", id);
-    await updateDoc(userDocRef, { status: "banned" });
-    fetchUsers();
-    showToast(`${name}'s account has been banned.`, 'error');
-  };
-
-  const handleUnbanUser = async (id, name) => {
-    const userDocRef = doc(db, "users", id);
-    await updateDoc(userDocRef, { status: "approved" });
-    fetchUsers();
-    showToast(`${name}'s account has been unbanned.`, 'success');
-  };
+  }
 
   return (
     <Card className="p-4">
@@ -1206,18 +1473,12 @@ function UsersPanel({ showToast }) {
               <div className="text-xs text-white/70 truncate">{u.email} • {u.tiktok} • {u.discord}</div>
             </div>
             <div className="flex items-center gap-2">
-              <Badge tone={u.status === 'approved' ? 'success' : u.status === 'pending' ? 'info' : u.status === 'banned' ? 'error' : 'default'}>{u.status}</Badge>
+              <Badge tone={u.status === 'approved' ? 'success' : u.status === 'pending' ? 'info' : 'default'}>{u.status}</Badge>
               {u.status === 'pending' && (
                 <>
                   <button onClick={() => handleApprove(u.id, u.displayName)} className="rounded-lg border border-emerald-400/40 bg-emerald-400/15 px-3 py-1 text-xs text-emerald-200 hover:bg-emerald-400/25 transition-colors">Approve</button>
                   <button onClick={() => handleReject(u.id, u.displayName)} className="rounded-lg border border-rose-400/40 bg-rose-400/15 px-3 py-1 text-xs text-rose-200 hover:bg-rose-400/25 transition-colors">Reject</button>
                 </>
-              )}
-              {u.status === 'approved' && (
-                <button onClick={() => handleBanUser(u.id, u.displayName)} className="rounded-lg border border-rose-400/40 bg-rose-400/15 px-3 py-1 text-xs text-rose-200 hover:bg-rose-400/25 transition-colors">Ban</button>
-              )}
-              {u.status === 'banned' && (
-                <button onClick={() => handleUnbanUser(u.id, u.displayName)} className="rounded-lg border border-emerald-400/40 bg-emerald-400/15 px-3 py-1 text-xs text-emerald-200 hover:bg-emerald-400/25 transition-colors">Unban</button>
               )}
             </div>
           </div>
@@ -1228,31 +1489,69 @@ function UsersPanel({ showToast }) {
   );
 }
 
-function PasswordResetPanel({ resets, setResets, showToast }) {
+function PasswordResetPanel({ showToast }) {
+  const [resets, setResets] = useState([]);
+  const [newPassword, setNewPassword] = useState({});
 
-  const handleMarkCompleted = (resetId) => {
-    setResets(prev => prev.map(r => r.id === resetId ? { ...r, status: 'completed' } : r));
-    showToast(`Password reset request for ${resetId} marked as completed.`, "success");
+  async function refresh() {
+    const q = query(collection(db, "password_resets"), where("status", "==", "pending"));
+    const querySnapshot = await getDocs(q);
+    const resetList = [];
+    querySnapshot.forEach((doc) => {
+      resetList.push({ ...doc.data(), id: doc.id });
+    });
+    setResets(resetList);
+  }
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const handlePasswordChange = (id, pass) => {
+    setNewPassword(prev => ({ ...prev, [id]: pass }));
+  }
+
+  const handleUpdatePassword = async (reset) => {
+    const pass = newPassword[reset.id];
+    if (!pass || pass.length < 6) {
+      showToast("Password must be at least 6 characters.", "error");
+      return;
+    }
+    const success = await updateUserPassword(reset.email, pass);
+    if (success) {
+      const resetRef = doc(db, "password_resets", reset.id);
+      await updateDoc(resetRef, { status: "completed" });
+      refresh();
+      showToast(`Password for ${reset.email} has been updated.`, "success");
+      showToast(`New pass for ${reset.email}: ${pass}. Please send securely.`, 'info', 10000);
+    } else {
+      showToast("Could not find a user with that email.", "error");
+    }
   };
-
-  const pendingResets = resets.filter(r => r.status === 'pending');
 
   return (
     <Card className="p-4">
       <h2 className="text-lg font-semibold mb-4">Password Reset Requests</h2>
-      {pendingResets.length === 0 ? (
+      {resets.length === 0 ? (
         <p className="text-white/70">No pending password reset requests.</p>
       ) : (
         <div className="space-y-3">
-          {pendingResets.map(reset => (
+          {resets.map(reset => (
             <div key={reset.id} className="rounded-xl border border-white/15 bg-white/5 p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="font-medium">{reset.email}</p>
-                <p className="text-xs text-white/60">Requested on: {new Date(reset.createdAt).toLocaleString()}</p>
+                <p className="text-xs text-white/60">Requested on: {new Date(reset.createdAt.toDate()).toLocaleString()}</p>
               </div>
               <div className="flex items-center gap-2 w-full sm:w-auto">
-                <button onClick={() => handleMarkCompleted(reset.id)} className="rounded-lg border border-emerald-400/50 bg-emerald-500/80 hover:bg-emerald-500 px-3 py-2 text-sm font-semibold transition-colors">
-                  Mark Completed
+                <Input
+                  id={`new-pass-${reset.id}`}
+                  type="text"
+                  placeholder="Enter new password"
+                  value={newPassword[reset.id] || ''}
+                  onChange={e => handlePasswordChange(reset.id, e.target.value)}
+                />
+                <button onClick={() => handleUpdatePassword(reset)} className="rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-3 py-2 text-sm font-semibold transition-colors">
+                  Set
                 </button>
               </div>
             </div>
@@ -1264,19 +1563,10 @@ function PasswordResetPanel({ resets, setResets, showToast }) {
 }
 
 
-function RequestsPanel({ requests, setRequests, showToast, showUndoToast, onOrder, products, setProducts }) {
+function RequestsPanel({ requests, setRequests, showToast, showUndoToast }) {
   const [statusFilter, setStatusFilter] = useState("All");
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState(new Set());
-
-  useEffect(() => {
-    const fetchRequests = async () => {
-      const requestsCollectionRef = collection(db, "requests");
-      const data = await getDocs(requestsCollectionRef);
-      setRequests(data.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
-    };
-    fetchRequests();
-  }, []);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -1309,27 +1599,33 @@ function RequestsPanel({ requests, setRequests, showToast, showUndoToast, onOrde
 
   const updateStatus = async (ids, newStatus) => {
     const originalRequests = [...requests];
-    for (const id of ids) {
-      const requestDocRef = doc(db, "requests", id);
-      await updateDoc(requestDocRef, { status: newStatus, updatedAt: nowISO() });
-    }
-    showUndoToast(`${ids.size} task(s) updated to "${newStatus}".`, () => {
-      setRequests(originalRequests);
-      showToast("Update reverted.", "info");
+    let next = requests.map(r => {
+      if (ids.has(r.id)) {
+        const updatedTask = { ...r, status: newStatus, updatedAt: serverTimestamp() };
+        // Add dummy sales/commission data if task is being completed and doesn't have it yet
+        if (newStatus === 'Complete' && !updatedTask.sales) {
+          updatedTask.sales = parseFloat((Math.random() * 500 + 50).toFixed(2));
+          updatedTask.commission = parseFloat((updatedTask.sales * 0.25).toFixed(2));
+        }
+        return updatedTask;
+      }
+      return r;
     });
-    setSelected(new Set());
-    const requestsCollectionRef = collection(db, "requests");
-    const data = await getDocs(requestsCollectionRef);
-    setRequests(data.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
-  };
+    setRequests(next);
 
-  const handleToggleOutOfStock = async (productId, outOfStock) => {
-    const productDocRef = doc(db, "products", productId);
-    await updateDoc(productDocRef, { outOfStock: !outOfStock });
-    showToast(`Product stock status updated.`, "success");
-    const productsCollectionRef = collection(db, "products");
-    const data = await getDocs(productsCollectionRef);
-    setProducts(data.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
+    try {
+      await Promise.all(Array.from(ids).map(id => updateTask(id, { status: newStatus })));
+      showUndoToast(`${ids.size} task(s) updated to "${newStatus}".`, () => {
+        setRequests(originalRequests);
+        // This is a mock undo, so we don't re-update the database
+        showToast("Update reverted.", "info");
+      });
+    } catch (error) {
+      setRequests(originalRequests);
+      showToast("An error occurred while updating tasks.", "error");
+    }
+
+    setSelected(new Set());
   };
 
   const handleSelect = (id) => {
@@ -1407,8 +1703,6 @@ function RequestsPanel({ requests, setRequests, showToast, showUndoToast, onOrde
               <th className="p-3">Product</th>
               <th className="p-3">Submissions</th>
               <th className="p-3">Status</th>
-              <th className="p-3">Order</th>
-              <th className="p-3">Stock</th>
             </tr>
           </thead>
           <tbody>
@@ -1429,16 +1723,8 @@ function RequestsPanel({ requests, setRequests, showToast, showUndoToast, onOrde
                     {STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </td>
-                <td className="p-3">
-                  <button onClick={() => onOrder(r)} className="rounded-lg border border-sky-400/50 bg-sky-500/80 hover:bg-sky-500 px-3 py-1.5 text-xs font-semibold transition-colors">Order</button>
-                </td>
-                <td className="p-3">
-                  <button onClick={() => handleToggleOutOfStock(r.productId, products.find(p => p.id === r.productId)?.outOfStock)} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${products.find(p => p.id === r.productId)?.outOfStock ? 'border-red-400/50 bg-red-500/80 hover:bg-red-500' : 'border-green-400/50 bg-green-500/80 hover:bg-green-500'}`}>
-                    {products.find(p => p.id === r.productId)?.outOfStock ? "Out of Stock" : "In Stock"}
-                  </button>
-                </td>
               </tr>
-            ))}}
+            ))}
           </tbody>
         </table>
         {filtered.length === 0 && <div className="text-center p-6 text-white/60">No tasks match your filters.</div>}
@@ -1541,62 +1827,42 @@ function BulkImportCard({ onImport, showToast }) {
 function ProductsPanel({ products, setProducts, showToast, showUndoToast }) {
   const [editing, setEditing] = useState(null);
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      const productsCollectionRef = collection(db, "products");
-      const data = await getDocs(productsCollectionRef);
-      setProducts(data.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
-    };
-    fetchProducts();
-  }, []);
+  async function refresh() {
+    const productList = await listProducts();
+    setProducts(productList);
+  }
 
   async function importRows(rows, sourceLabel, replaceMode) {
     const normalized = rows.map(normalizeProductRow);
-    if (replaceMode) {
-      // Delete all existing products and then add new ones
-      const productsCollectionRef = collection(db, "products");
-      const existingDocs = await getDocs(productsCollectionRef);
-      for (const doc of existingDocs.docs) {
-        await deleteDoc(doc(db, "products", doc.id));
-      }
-      for (const row of normalized) {
-        await setDoc(doc(db, "products", row.id), row);
-      }
-    } else {
-      // Merge new products with existing ones
-      for (const row of normalized) {
-        await setDoc(doc(db, "products", row.id), row, { merge: true });
-      }
-    }
+    // This is a mock import, so we don't actually save to the database
+    setProducts((prev) => {
+      if (replaceMode) return normalized;
+      const map = new Map(prev.map((p) => [p.id, p]));
+      normalized.forEach((n) => {
+        const existing = map.get(n.id);
+        map.set(n.id, { ...(existing || {}), ...n, createdAt: existing?.createdAt || n.createdAt, updatedAt: nowISO() });
+      });
+      return Array.from(map.values());
+    });
     showToast(`Imported ${normalized.length} products from ${sourceLabel}${replaceMode ? " (replaced all)" : " (merged by id)"}.`, "success");
-    const productsCollectionRef = collection(db, "products");
-    const data = await getDocs(productsCollectionRef);
-    setProducts(data.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
   }
 
   const handleSave = async (updatedProduct) => {
     if (updatedProduct.id) { // Editing
-      const productDocRef = doc(db, "products", updatedProduct.id);
-      await updateDoc(productDocRef, { ...updatedProduct, updatedAt: nowISO() });
+      await updateProduct(updatedProduct.id, updatedProduct);
       showToast("Product updated successfully!", "success");
     } else { // Adding
-      const newP = { ...updatedProduct, id: `P_${Date.now()}`, createdAt: nowISO(), updatedAt: nowISO(), deletedAt: null };
-      await setDoc(doc(db, "products", newP.id), newP);
+      await addProduct(updatedProduct);
       showToast("Product added successfully!", "success");
     }
-    const productsCollectionRef = collection(db, "products");
-    const data = await getDocs(productsCollectionRef);
-    setProducts(data.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
+    refresh();
     setEditing(null);
   };
 
   const handleArchiveToggle = async (id, active) => {
-    const productDocRef = doc(db, "products", id);
-    await updateDoc(productDocRef, { active: !active, deletedAt: active ? nowISO() : null, updatedAt: nowISO() });
+    await updateProduct(id, { active: !active, deletedAt: active ? serverTimestamp() : null });
     showToast(`Product ${active ? 'archived' : 'restored'}.`, 'info');
-    const productsCollectionRef = collection(db, "products");
-    const data = await getDocs(productsCollectionRef);
-    setProducts(data.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
+    refresh();
   };
 
   const downloadTemplate = () => {
@@ -1638,7 +1904,6 @@ function ProductsPanel({ products, setProducts, showToast, showUndoToast }) {
               </div>
               <div className="flex items-center gap-2">
                 <Badge tone={p.active ? 'success' : 'default'}>{p.active ? 'Active' : 'Archived'}</Badge>
-                {p.outOfStock && <Badge tone="error">Out of Stock</Badge>}
                 <button onClick={() => setEditing(p)} className="text-xs hover:underline text-sky-300">Edit</button>
                 <button onClick={() => handleArchiveToggle(p.id, p.active)} className="text-xs hover:underline">{p.active ? 'Archive' : 'Restore'}</button>
               </div>
@@ -1674,15 +1939,8 @@ function EditProductSheet({ product, onClose, onSave }) {
           <Input id="prod-share" label="Affiliate Share Link" value={p.shareLink || ''} onChange={(e) => setP({ ...p, shareLink: e.target.value })} />
           <Input id="prod-content" label="Content Doc URL" value={p.contentDocUrl || ''} onChange={(e) => setP({ ...p, contentDocUrl: e.target.value })} />
           <Input id="prod-url" label="Product Page URL" value={p.productUrl || ''} onChange={(e) => setP({ ...p, productUrl: e.target.value })} />
-          <Input id="prod-order-link" label="Order Link" value={p.orderLink || ''} onChange={(e) => setP({ ...p, orderLink: e.target.value })} />
           <Input id="prod-comm" label="Commission" value={p.commission || ''} onChange={(e) => setP({ ...p, commission: e.target.value })} />
-          <div className="flex items-center gap-4">
-            <label htmlFor="prod-out-of-stock" className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" id="prod-out-of-stock" checked={p.outOfStock} onChange={(e) => setP({ ...p, outOfStock: e.target.checked })} className="rounded" />
-              <span>Out of Stock</span>
-            </label>
-          </div>
-           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-white/80 mb-1.5">Availability Start</label>
               <input type="datetime-local" value={toDTLocal(p.availabilityStart)} onChange={(e) => setP({ ...p, availabilityStart: fromDTLocal(e.target.value) })} className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2.5 text-sm" />
@@ -1697,29 +1955,6 @@ function EditProductSheet({ product, onClose, onSave }) {
             <button type="submit" className="rounded-lg border border-indigo-400/50 bg-indigo-500/80 hover:bg-indigo-500 px-6 py-2 text-sm font-semibold transition-colors">Save Product</button>
           </div>
         </form>
-      </Card>
-    </div>
-  );
-}
-
-function OrderPage({ request, onClose, products }) {
-  const product = products.find(p => p.id === request.productId);
-  return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 space-y-4">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-semibold">Order Product</h2>
-            <button type="button" onClick={onClose} className="text-sm hover:underline">Close</button>
-          </div>
-          <div>
-            <h3 className="text-xl font-semibold">{request.productTitle}</h3>
-            <p className="text-sm text-white/60">{request.affiliateEmail}</p>
-          </div>
-          <div className="flex justify-center">
-            <a href={product.orderLink} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-sky-400/50 bg-sky-500/80 hover:bg-sky-500 px-6 py-3 text-base font-semibold transition-colors">Order Now</a>
-          </div>
-        </div>
       </Card>
     </div>
   );
