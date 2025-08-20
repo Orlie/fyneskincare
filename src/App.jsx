@@ -520,24 +520,22 @@ export default function App() {
   const [tab, setTab] = useState("browse");
   const [products, setProducts] = useState([]);
   const [requests, setRequests] = useState([]);
-  const [passwordResets, setPasswordResets] = useState(() => lsget(LSK_PASSWORD_RESETS, []));
   const [loading, setLoading] = useState(true);
   const { toast, showToast, showUndoToast, hideToast } = useToast();
 
-  const [session, setSessionState] = useState(() => getSession());
-  const me = useMemo(() => currentUser(session), [session]);
+  const [session, setSessionState] = useState(null);
+  const [me, setMe] = useState(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // User is signed in, see docs for a list of available properties
-        // https://firebase.google.com/docs/reference/js/firebase.User
-        const { uid, email, displayName, photoURL } = user;
-        const session = { userId: uid, email, displayName, photoURL, role: 'affiliate' }; // Assuming all logged in users are affiliates for now
-        setSessionState(session);
+        const sessionData = { userId: user.uid, email: user.email, displayName: user.displayName, photoURL: user.photoURL };
+        setSessionState(sessionData);
+        const currentUserData = await currentUser(sessionData);
+        setMe(currentUserData);
       } else {
-        // User is signed out
         setSessionState(null);
+        setMe(null);
       }
       setLoading(false);
     });
@@ -548,11 +546,11 @@ export default function App() {
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
-      const products = await listProducts();
-      setProducts(products);
+      const productsData = await listProducts();
+      setProducts(productsData);
       if (me?.id) {
-        const tasks = await listTasksByUser(me.id);
-        setRequests(tasks);
+        const tasksData = await listTasksByUser(me.id);
+        setRequests(tasksData);
       }
       setLoading(false);
     }
@@ -565,9 +563,8 @@ export default function App() {
     return by;
   }, [requests]);
 
-  const handleLogout = () => {
-    logout();
-    setSessionState(getSession());
+  const handleLogout = async () => {
+    await logout();
     showToast("You have been logged out.", "info");
   };
 
@@ -688,14 +685,20 @@ function AdminLogin({ onSuccess, showToast }) {
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
 
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault();
-    const s = loginAdmin(username, password);
-    if (s) {
-      showToast("Admin login successful!", "success");
-      onSuccess?.();
-    } else {
-      setErr("Invalid username or password.");
+    setErr("");
+    try {
+      const s = await loginAdmin(username, password);
+      if (s) {
+        showToast("Admin login successful!", "success");
+        onSuccess?.();
+      } else {
+        setErr("Invalid username or password.");
+        showToast("Login failed. Please check your credentials.", "error");
+      }
+    } catch (error) {
+      setErr(error.message);
       showToast("Login failed. Please check your credentials.", "error");
     }
   }
@@ -754,11 +757,11 @@ function AffiliateAuthPanel({ onAuthChange, showToast }) {
     return Object.keys(newErrors).length === 0;
   }
 
-  function doLogin(e) {
+  async function doLogin(e) {
     e.preventDefault();
     if (!validate(['email', 'password'])) return;
 
-    const result = loginAffiliate(email, password);
+    const result = await loginAffiliate(email, password);
     if (result.session) {
       showToast("Welcome back!", "success");
       onAuthChange?.();
@@ -767,12 +770,12 @@ function AffiliateAuthPanel({ onAuthChange, showToast }) {
     }
   }
 
-  function doRegister(e) {
+  async function doRegister(e) {
     e.preventDefault();
     if (!validate(['displayName', 'email', 'password', 'tiktok', 'discord'])) return;
 
     try {
-      const ok = registerAffiliate({ email, password, displayName, tiktok, discord });
+      const ok = await registerAffiliate({ email, password, displayName, tiktok, discord });
       if (!ok) {
         setErr({ form: "An account with this email already exists." });
         return;
@@ -1386,7 +1389,7 @@ function AffiliateStats({ requests, profile, me }) {
 /*************************
  * ADMIN
  *************************/
-function AdminScreen({ products, setProducts, requests, setRequests, passwordResets, setPasswordResets, counts, me, onLogout, showToast, showUndoToast }) {
+function AdminScreen({ products, setProducts, requests, setRequests, counts, me, onLogout, showToast, showUndoToast }) {
   const [view, setView] = useState("requests");
 
   const adminStats = useMemo(() => {
@@ -1424,7 +1427,7 @@ function AdminScreen({ products, setProducts, requests, setRequests, passwordRes
       {view === "requests" && <RequestsPanel requests={requests} setRequests={setRequests} showToast={showToast} showUndoToast={showUndoToast} />}
       {view === "products" && <ProductsPanel products={products} setProducts={setProducts} showToast={showToast} showUndoToast={showUndoToast} />}
       {view === "users" && <UsersPanel showToast={showToast} />}
-      {view === "password_resets" && <PasswordResetPanel resets={passwordResets} setResets={setPasswordResets} showToast={showToast} />}
+      {view === "password_resets" && <PasswordResetPanel showToast={showToast} />}
     </div>
   );
 }
