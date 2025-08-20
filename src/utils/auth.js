@@ -13,8 +13,25 @@ const auth = getAuth();
 function nowISO() { return new Date().toISOString(); }
 
 /*************************
- * SESSION HELPERS
+ * PRODUCTS (utility-only)
  *************************/
+export async function listProducts() {
+    const querySnapshot = await getDocs(collection(db, "products"));
+    const products = [];
+    querySnapshot.forEach((doc) => {
+        products.push({ ...doc.data(), id: doc.id });
+    });
+    return products;
+}
+
+export async function addProduct(product) {
+    await addDoc(collection(db, "products"), product);
+}
+
+export async function updateProduct(id, patch) {
+    const productRef = doc(db, "products", id);
+    await updateDoc(productRef, patch);
+}
 export function getSession() {
     const user = auth.currentUser;
     if (user) {
