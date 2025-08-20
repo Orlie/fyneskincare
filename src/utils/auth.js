@@ -120,3 +120,39 @@ export async function updateTask(id, updates) {
     await updateDoc(doc(db, "tasks", id), { ...updates, updatedAt: serverTimestamp() });
     return true;
 }
+
+export async function updateUserOnboarding(userId, onboardingData) {
+    const userRef = doc(db, "users", userId);
+    await updateDoc(userRef, {
+        onboarding: onboardingData,
+        updatedAt: serverTimestamp(),
+    });
+    return true;
+}
+
+export async function updateUserProfile(userId, profileData) {
+    const userRef = doc(db, "users", userId);
+    await updateDoc(userRef, {
+        ...profileData,
+        updatedAt: serverTimestamp(),
+    });
+    return true;
+}
+
+export async function addProduct(productData) {
+    const newProductRef = await addDoc(collection(db, "products"), {
+        ...productData,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+    });
+    return newProductRef.id;
+}
+
+export async function updateProduct(productId, productData) {
+    const productRef = doc(db, "products", productId);
+    await updateDoc(productRef, {
+        ...productData,
+        updatedAt: serverTimestamp(),
+    });
+    return true;
+}
