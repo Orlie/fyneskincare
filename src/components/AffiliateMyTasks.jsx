@@ -15,11 +15,11 @@ export default function AffiliateMyTasks({ me }) {
 
     const canLoad = !!me?.id;
 
-    const refresh = React.useCallback(() => {
+    const refresh = React.useCallback(async () => {
         if (!canLoad) return;
         setBusy(true);
         try {
-            const data = listTasksByUser(me.id) || [];
+            const data = (await listTasksByUser(me.id)) || [];
             // Ensure stable shape
             setTasks(
                 data.map((t) => ({
@@ -27,6 +27,7 @@ export default function AffiliateMyTasks({ me }) {
                     videoLink: t.videoLink || "",
                     adCode: t.adCode || "",
                     status: t.status || "Pending",
+                    createdAt: t.createdAt?.toDate ? t.createdAt.toDate() : new Date(t.createdAt),
                 }))
             );
         } finally {
