@@ -950,7 +950,12 @@ function AffiliateScreen({ session, products, requests, setRequests, showToast, 
 
   
   useEffect(() => {
-    if (me && isAffiliate(session)) setProfile((p) => ({ ...p, ...profileFromUser(me) }));
+    if (me && isAffiliate(session)) {
+      setProfile((p) => ({ ...p, ...profileFromUser(me) }));
+      if (me.onboarding?.completed) {
+        setOnboarding({ completed: true });
+      }
+    }
   }, [me, session]);
 
   const [q, setQ] = useState("");
@@ -1111,10 +1116,91 @@ function AffiliateScreen({ session, products, requests, setRequests, showToast, 
       )}
 
       {affView === "profile" && <AffiliateProfilePage profile={profile} setProfile={setProfile} showToast={showToast} onLogout={() => { logout(); setSession(getSession()); }} me={me} />}
-      {affView === "tasks" && <AffiliateTasksPage requests={requests} setRequests={setRequests} profile={profile} me={me} showToast={showToast} setAffView={setAffView} />}
+      {affView === "tasks" && <AffiliateTasksPage requests={requests} setRequests={setRequests} showToast={showToast} />}
       {affView === "stats" && <AffiliateStats requests={requests} profile={profile} me={me} />}
     </div>
   );
+}
+
+function AffiliateTasksPage({ requests, setRequests, showToast }) {
+    const [tasks, setTasks] = useState(requests);
+
+    useEffect(() => {
+        setTasks(requests);
+    }, [requests]);
+
+    function setLocal(id, patch) {
+        setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+    }
+
+    async function save(id, patch) {
+        const updatedTasks = tasks.map(t => (t.id === id ? { ...t, ...patch } : t));
+        setTasks(updatedTasks);
+        setRequests(updatedTasks);
+        await updateTask(id, patch);
+        showToast("Task updated!", "success");
+    }
+
+    if (!tasks.length) {
+        return (
+            <EmptyState
+                icon={<ClipboardDocumentListIcon className="w-full h-full" />}
+                title="No Tasks Yet"
+                message="You haven't added any products to your showcase. Browse products and add one to create a task."
+            />
+        );
+    }
+
+    return (
+        <div className="grid gap-3">
+            {tasks.map((t) => (
+                <Card key={t.id} className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                            <div className="font-semibold truncate" title={t.productTitle}>{t.productTitle}</div>
+                            <div className="text-xs text-white/70 truncate">Created: {fmtDate(t.createdAt)}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <select
+                                value={t.status}
+                                onChange={(e) => save(t.id, { status: e.target.value })}
+                                className="rounded-lg border border-white/20 bg-slate-800 px-2 py-1 text-xs appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                            >
+                                {STATUS.map((s) => (
+                                    <option key={s} value={s}>{s}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <Input
+                            id={`video-${t.id}`}
+                            label="TikTok Video Link"
+                            value={t.videoLink || ''}
+                            onChange={(e) => setLocal(t.id, { videoLink: e.target.value })}
+                            onBlur={(e) => {
+                                const newStatus = e.target.value ? "Video Submitted" : "Pending";
+                                save(t.id, { videoLink: e.target.value, status: newStatus })
+                            }}
+                            placeholder="https://tiktok.com/..."
+                        />
+                        <Input
+                            id={`code-${t.id}`}
+                            label="Ad Code"
+                            value={t.adCode || ''}
+                            onChange={(e) => setLocal(t.id, { adCode: e.target.value })}
+                            onBlur={(e) => {
+                                const newStatus = e.target.value ? "Ad Code Submitted" : (t.videoLink ? "Video Submitted" : "Pending");
+                                save(t.id, { adCode: e.target.value, status: newStatus })
+                            }}
+                            placeholder="FYNE25"
+                        />
+                    </div>
+                </Card>
+            ))}
+        </div>
+    );
 }
 
 function AffiliateProfilePage({ profile, setProfile, showToast, onLogout, me }) {
